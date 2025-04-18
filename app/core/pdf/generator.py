@@ -22,8 +22,12 @@ class PDFSection(BaseModel):
 
     id: str
     title: str
-    content: str  # Raw Markdown content
-    html_content: str = ""  # Processed HTML content
+    raw_content: str  # Raw Markdown content (renamed from content)
+    main_markdown_content: str = ""  # Main content before sources
+    sources_markdown_content: str = ""  # Sources section markdown
+    html_content: str = ""  # Processed HTML content (will be replaced later)
+    main_html_content: str = ""  # HTML for main content
+    sources_html_content: str = ""  # HTML for sources
     intro: str = ""
     key_topics: List[str] = []
     metadata: Dict = {}  # YAML frontmatter metadata
@@ -54,28 +58,8 @@ class EnhancedPDFGenerator:
         )
         self.template = self.env.get_template(self.template_name)
 
-        # Initialize markdown with an expanded set of extensions
-        self.md = markdown.Markdown(
-            extensions=[
-                "extra",  # Includes tables, fenced_code, footnotes, etc.
-                "meta",
-                "codehilite",
-                "admonition",
-                "attr_list",
-                "toc",
-                "def_list",  # Definition lists
-                "footnotes",  # Footnotes support
-                "abbr",  # Abbreviation support
-                "md_in_html",  # Markdown inside HTML
-                "sane_lists",  # Better list handling
-                "nl2br",  # Convert newlines to <br> tags for proper line breaks
-            ],
-            extension_configs={
-                "codehilite": {"css_class": "highlight", "guess_lang": False},
-                "toc": {"permalink": False},  # Disable permalinks to remove ¶
-                "footnotes": {"BACKLINK_TEXT": "↩"},
-            },
-        )
+        # Initialize the markdown processor once for reuse
+        self._markdown_processor = self._create_markdown_processor()
 
     def _extract_section_metadata(self, content: str) -> Tuple[Dict, str]:
         """Extract YAML frontmatter and content from a markdown section."""
@@ -104,22 +88,24 @@ class EnhancedPDFGenerator:
         estimated_time = min(5, max(1, round(words / 300)))
         return estimated_time
 
-    def _extract_key_topics(self, content: str, max_topics: int = None) -> List[str]:
-        """Extract key topics from the content based on headings.
+    def _extract_key_topics(self, html_content: str, max_topics: int = None) -> List[str]:
+        """Extract key topics from the HTML content based on headings.
 
-        This extracts the subsection headings (h2, h3) from the content to build
+        This extracts the subsection headings (h2, h3) from the HTML content to build
         a table of contents.
 
         Args:
-            content: The markdown content to extract topics from
+            html_content: The HTML content to extract topics from (already converted from markdown)
             max_topics: Optional maximum number of topics to extract
 
         Returns:
             List of topic strings
         """
-        # First convert the markdown to HTML to get proper heading structure
-        temp_html = self._convert_markdown_to_html(content)
-        soup = BeautifulSoup(temp_html, "html.parser")
+        if not html_content.strip():
+            return []  # Return empty list for empty content
+        
+        # Parse the HTML with BeautifulSoup
+        soup = BeautifulSoup(html_content, "html.parser")
 
         # Only consider h2 and h3 headings for key topics
         headings = soup.find_all(["h2", "h3"])
@@ -188,16 +174,27 @@ class EnhancedPDFGenerator:
             # We no longer add the visible paragraph symbol anchor
             # Just ensure the heading has an ID for internal linking
 
-    def _convert_markdown_to_html(self, markdown_content):
+    def _markdown_to_styled_html(self, markdown_content: str) -> str:
         """
         Convert markdown content to HTML with enhanced styling.
+        
+        Args:
+            markdown_content: The markdown string to convert
+            
+        Returns:
+            A processed HTML string with styling applied
         """
-        # Create the markdown object with all extensions
-        md = self._create_markdown_processor()
-
-        # Convert markdown to HTML
-        html = md.convert(markdown_content)
-
+        if not markdown_content.strip():
+            print("Warning: Empty markdown content passed to _markdown_to_styled_html")
+            return ""  # Return empty string for empty content
+        
+        # Convert markdown to HTML using the initialized processor
+        html = self._markdown_processor.convert(markdown_content)
+        
+        # Reset the markdown processor to clear its state
+        # This is important, especially for TOC and other extensions that maintain state
+        self._markdown_processor.reset()
+        
         soup = BeautifulSoup(html, "html.parser")
 
         # Process headings to add anchors for TOC
@@ -214,27 +211,18 @@ class EnhancedPDFGenerator:
 
         # Process tables
         for table in soup.find_all("table"):
-            table["class"] = table.get("class", []) + [
-                "table",
-                "table-striped",
-                "table-hover",
-            ]
-
-            # If the table has a thead, add a class to it
-            thead = table.find("thead")
-            if thead:
-                thead["class"] = thead.get("class", []) + ["thead-dark"]
-
-            # If the first row contains th elements, it's a header row
-            # Create a thead if it doesn't exist
-            first_row = table.find("tr")
-            if first_row and first_row.find("th") and not thead:
-                thead = soup.new_tag("thead")
-                thead["class"] = ["thead-dark"]
-                table.insert(0, thead)
-                thead.append(first_row)
-
-        return str(soup)
+            self._process_table(table, soup)
+        
+        result = str(soup)
+        
+        # Log the first 200 chars of the result for debugging
+        if len(result) > 0:
+            preview = result[:min(200, len(result))]
+            print(f"HTML conversion result preview: {preview}...")
+        else:
+            print("Warning: HTML conversion resulted in empty string!")
+        
+        return result
 
     def _process_list(self, list_tag, level=1, soup=None):
         """Add classes to list elements for better styling."""
@@ -249,6 +237,53 @@ class EnhancedPDFGenerator:
             # Recursively process nested lists with increased level
             for nested_list in li.find_all(["ul", "ol"], recursive=False):
                 self._process_list(nested_list, level=level + 1, soup=soup)
+
+    def _process_table(self, table, soup):
+        """
+        Add classes and structure to tables for better styling.
+        
+        Args:
+            table: The BeautifulSoup table element to process
+            soup: The BeautifulSoup object for creating new tags
+        """
+        # Add styling classes to the table
+        table_classes = ["table", "table-striped", "table-hover"]
+        
+        # Add custom class from config if available
+        if "STYLING" in PDF_CONFIG and "TABLE_CLASS" in PDF_CONFIG["STYLING"]:
+            table_classes.append(PDF_CONFIG["STYLING"]["TABLE_CLASS"])
+        
+        table["class"] = table.get("class", []) + table_classes
+
+        # If the table has a thead, add a class to it
+        thead = table.find("thead")
+        if thead:
+            thead["class"] = thead.get("class", []) + ["thead-dark"]
+
+        # If the first row contains th elements, it's a header row
+        # Create a thead if it doesn't exist
+        first_row = table.find("tr")
+        if first_row and first_row.find("th") and not thead:
+            thead = soup.new_tag("thead")
+            thead["class"] = ["thead-dark"]
+            table.insert(0, thead)
+            thead.append(first_row)
+        
+        # Add page-break control for WeasyPrint
+        # This helps ensure tables don't break across pages in awkward ways
+        if "STYLING" in PDF_CONFIG and "AVOID_PAGE_BREAK_ELEMENTS" in PDF_CONFIG["STYLING"]:
+            if "table" in PDF_CONFIG["STYLING"]["AVOID_PAGE_BREAK_ELEMENTS"]:
+                # Add inline style to avoid page breaks inside table
+                table['style'] = (table.get('style', '') + '; page-break-inside: avoid;').strip()
+            
+        # Add a wrapper div if table is wide to handle overflow
+        width = table.get('width')
+        if width and (width.endswith('%') and int(width[:-1]) > 95):
+            # Create a wrapper div for the table
+            wrapper = soup.new_tag('div')
+            wrapper['class'] = ['table-responsive']
+            # Move the table inside the wrapper
+            table.wrap(wrapper)
 
     def _generate_toc(self, sections):
         """Generate a table of contents from the sections."""
@@ -277,25 +312,104 @@ class EnhancedPDFGenerator:
         return toc_html
 
     def _process_sections(self, sections):
-        """Process all sections to extract metadata and generate HTML content."""
-        for section in sections:
+        """Process all sections to extract metadata, split content and generate HTML."""
+        processed_sections = []
+        all_sources_html = ""
+        
+        print(f"\nProcessing {len(sections)} sections...")
+
+        for idx, section in enumerate(sections, 1):
+            print(f"\nProcessing section {idx}: {section.title} (ID: {section.id})")
+            
+            # Check the raw content
+            if not section.raw_content.strip():
+                print(f"Warning: Section {section.id} has empty raw_content!")
+            else:
+                raw_chars = len(section.raw_content)
+                print(f"Raw content length: {raw_chars} characters")
+            
             # Extract section metadata and clean content
-            metadata, content = self._extract_section_metadata(section.content)
+            metadata, content_after_meta = self._extract_section_metadata(section.raw_content)
             section.metadata = metadata
+            
+            print(f"Metadata extracted: {list(metadata.keys())}")
+            
+            # Split content into main part and sources part
+            section.main_markdown_content, section.sources_markdown_content = self._split_main_and_sources(content_after_meta)
+            
+            print(f"Main markdown length: {len(section.main_markdown_content)} characters")
+            print(f"Sources markdown length: {len(section.sources_markdown_content)} characters")
+            
+            # Process main content - convert to HTML first
+            section.main_html_content = self._markdown_to_styled_html(section.main_markdown_content)
+            
+            print(f"Main HTML content length: {len(section.main_html_content)} characters")
+            
+            # Extract intro paragraph for section summaries (from main markdown content)
+            section.intro = self._extract_intro(section.main_markdown_content)
+            
+            # Extract key topics/subsections for TOC and summaries (from main HTML content)
+            section.key_topics = self._extract_key_topics(section.main_html_content, max_topics=5)
+            print(f"Extracted key topics: {section.key_topics}")
+            
+            # Estimate reading time (based on main markdown content)
+            section.reading_time = self._estimate_reading_time(section.main_markdown_content)
+            
+            # Process sources content if exists
+            if section.sources_markdown_content:
+                print(f"Processing sources for section {section.id}")
+                # Clean up potential empty lines before conversion
+                cleaned_sources = section.sources_markdown_content.strip()
+                if cleaned_sources:
+                    # Convert sources markdown to basic HTML
+                    basic_sources_html = markdown.markdown(
+                        cleaned_sources, 
+                        extensions=["extra", "footnotes", "nl2br"]
+                    )
+                    
+                    # Process the sources HTML with the dedicated helper
+                    processed_sources_html = self._process_sources_html(basic_sources_html)
+                    
+                    # Store the processed HTML
+                    section.sources_html_content = processed_sources_html
+                    
+                    source_html_len = len(processed_sources_html)
+                    print(f"Processed sources HTML length: {source_html_len} characters")
+                    
+                    # Append to global sources HTML collection
+                    if processed_sources_html.strip():
+                        all_sources_html += processed_sources_html + "\n\n"
+                        print(f"Added to all_sources_html (now {len(all_sources_html)} characters)")
+            
+            # Keep the html_content field for backward compatibility (use main content)
+            section.html_content = section.main_html_content
+            
+            processed_sections.append(section)
+        
+        # Final summary
+        print(f"\nProcessing complete. {len(processed_sections)} sections processed.")
+        print(f"Total all_sources_html length: {len(all_sources_html)} characters")
+        
+        # Save HTML to files for debugging if needed
+        debug_output = Path("debug_output")
+        if debug_output.exists() or (not debug_output.exists() and len(all_sources_html) > 0):
+            try:
+                debug_output.mkdir(exist_ok=True)
+                
+                # Save all sources HTML
+                with open(debug_output / "all_sources.html", "w", encoding="utf-8") as f:
+                    f.write(all_sources_html)
+                print(f"Saved all_sources.html to {debug_output}")
+                
+                # Save main content from each section
+                for idx, section in enumerate(processed_sections, 1):
+                    with open(debug_output / f"section_{idx}_{section.id}.html", "w", encoding="utf-8") as f:
+                        f.write(section.main_html_content)
+                    print(f"Saved section_{idx}_{section.id}.html to {debug_output}")
+            except Exception as e:
+                print(f"Error saving debug HTML: {str(e)}")
 
-            # Extract intro paragraph for section summaries
-            section.intro = self._extract_intro(content)
-
-            # Extract key topics/subsections for TOC and summaries
-            section.key_topics = self._extract_key_topics(content, max_topics=5)
-
-            # Estimate reading time
-            section.reading_time = self._estimate_reading_time(content)
-
-            # Convert markdown to HTML with enhanced processing
-            section.html_content = self._convert_markdown_to_html(content)
-
-        return sections
+        return processed_sections, all_sources_html
 
     def _extract_intro(self, content: str) -> str:
         """Extract the first paragraph for use as an introduction/summary."""
@@ -341,15 +455,26 @@ class EnhancedPDFGenerator:
         Returns:
             Path to the generated PDF file
         """
+        print("\n=== Starting PDF Generation ===")
+        
         # Make sure output directory exists
         output_dir = Path(output_path).parent
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Output directory: {output_dir}")
 
         # Process all sections
-        processed_sections = self._process_sections(sections_data)
+        print(f"Processing {len(sections_data)} section objects...")
+        processed_sections, all_sources_html = self._process_sections(sections_data)
+        
+        # Verify processed sections
+        for idx, section in enumerate(processed_sections, 1):
+            print(f"Section {idx}: {section.title} - Main HTML length: {len(section.main_html_content)} characters")
+        
+        print(f"All sources HTML length: {len(all_sources_html)} characters")
 
         # Use project_root consistently for all paths
         base_url = self.project_root.as_uri()
+        print(f"Base URL: {base_url}")
         
         # Get paths for logo and favicon
         logo_path = self.project_root / "templates/assets/supervity_logo.png"
@@ -376,29 +501,50 @@ class EnhancedPDFGenerator:
         
         print(f"Using logo URL: {logo_file_url}")
         print(f"Using favicon URL: {favicon_file_url}")
-        print(f"Using base URL: {base_url}")
 
         # Generate TOC
+        print("Generating table of contents...")
         toc_html = self._generate_toc(processed_sections)
+        print(f"TOC HTML length: {len(toc_html)} characters")
 
         # Generate the HTML content from the template
         now = datetime.now()
         formatted_date = now.strftime("%Y-%m-%d")
-
-        html_content = self.template.render(
-            title=f"{metadata.get('company_name', 'Company')} {metadata.get('report_type', 'Analysis')}",
-            company_name=metadata.get("company_name", "Company"),
-            language=metadata.get("language", "English"),
-            date=formatted_date,
-            sections=processed_sections,
-            toc=toc_html,
-            logo_url=logo_file_url,
-            favicon_url=favicon_file_url,
-            section_order=SECTION_ORDER,
-            pdf_config=PDF_CONFIG,
-        )
+        
+        print("Rendering HTML template...")
+        template_vars = {
+            "title": f"{metadata.get('company_name', 'Company')} {metadata.get('report_type', 'Analysis')}",
+            "company_name": metadata.get("company_name", "Company"),
+            "language": metadata.get("language", "English"),
+            "date": formatted_date,
+            "sections": processed_sections,
+            "toc": toc_html,
+            "logo_url": logo_file_url,
+            "favicon_url": favicon_file_url,
+            "section_order": SECTION_ORDER,
+            "pdf_config": PDF_CONFIG,
+            "all_sources_html": all_sources_html,
+            "generation_date": formatted_date,
+        }
+        
+        print(f"Template variables: {list(template_vars.keys())}")
+        html_content = self.template.render(**template_vars)
+        
+        print(f"Rendered HTML length: {len(html_content)} characters")
+        
+        # Save the full HTML for debugging
+        debug_output = Path("debug_output")
+        if debug_output.exists() or (not debug_output.exists() and len(html_content) > 0):
+            try:
+                debug_output.mkdir(exist_ok=True)
+                with open(debug_output / "rendered_template.html", "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                print(f"Saved rendered template to {debug_output / 'rendered_template.html'}")
+            except Exception as e:
+                print(f"Error saving rendered template: {str(e)}")
 
         # Generate the PDF file from HTML
+        print("Generating PDF from HTML...")
         font_config = FontConfiguration()
         html = HTML(string=html_content, base_url=base_url)
 
@@ -412,9 +558,36 @@ class EnhancedPDFGenerator:
         css = [
             CSS(filename=str(css_file)) for css_file in css_files if css_file.exists()
         ]
-
-        # If no CSS files exist, use default styles
+        
+        css_files_found = [css_file.name for css_file in css_files if css_file.exists()]
+        if css_files_found:
+            print(f"Using CSS files: {', '.join(css_files_found)}")
+        else:
+            print("No CSS files found, using default styles with debugging CSS")
+        
+        # Add debugging CSS if no custom CSS files exist
+        # This helps visualize section boundaries, content areas, etc.
         if not css:
+            debug_css_string = """
+            /* Debug styles to help visualize content areas */
+            .section-content {
+                border: 1px solid rgba(0, 0, 255, 0.2);
+                background-color: rgba(240, 240, 255, 0.1);
+                padding: 10px;
+            }
+            .final-sources-section {
+                border: 1px solid rgba(255, 0, 0, 0.2);
+                background-color: rgba(255, 240, 240, 0.1);
+                padding: 10px;
+            }
+            h2, h3, h4, h5, h6 {
+                border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+            }
+            table {
+                border: 1px solid rgba(0, 255, 0, 0.2) !important;
+            }
+            """
+            
             default_css = CSS(
                 string="""
                 @page {
@@ -603,12 +776,13 @@ class EnhancedPDFGenerator:
                 .source-item {
                     margin-bottom: 0.5em;
                 }
-            """
+                """ + debug_css_string  # Add the debug CSS
             )
             css = [default_css]
 
         # Generate the PDF with proper error handling
         try:
+            print(f"Writing PDF to: {output_path}")
             html.write_pdf(output_path, stylesheets=css, font_config=font_config)
             print(f"PDF generated successfully: {output_path}")
             return Path(output_path)
@@ -630,33 +804,111 @@ class EnhancedPDFGenerator:
 
         return content
 
-    def _extract_metadata_and_split_sources(
-        self, raw_content: str
-    ) -> Tuple[Dict, str, str]:
-        """Extract YAML frontmatter, main content, and sources section."""
-        metadata, content_with_sources = self._extract_section_metadata(raw_content)
-
-        # Try to split content and sources
+    def _split_main_and_sources(self, content_with_sources: str) -> Tuple[str, str]:
+        """
+        Splits markdown content into main part and sources part.
+        
+        Args:
+            content_with_sources: Markdown content (after metadata extraction)
+            
+        Returns:
+            Tuple of (main_content, sources_content)
+        """
         main_content = content_with_sources
         sources_content = ""
+        
+        # Use patterns from config
+        source_patterns = PDF_CONFIG["SOURCES"]["SOURCE_HEADING_PATTERNS"]
+        
+        # Regex pattern to find any of the source headings
+        # This pattern matches headings like:
+        # # Sources
+        # ## Sources
+        # **Sources**
+        # at the start of a line with optional space before/after
+        pattern_str = r"(?i)^[ \t]*(?:#{1,2}\s*|(?:\*\*)?)(?:{})(?:(?:\*\*)?\s*\n|$)".format("|".join(re.escape(p) for p in source_patterns))
+        
+        match = re.search(pattern_str, content_with_sources, re.MULTILINE)
 
-        # Look for a "Sources" or "##Sources" heading
-        source_patterns = [
-            r"(?i)##\s*sources\s*\n",  # ## Sources
-            r"(?i)#\s*sources\s*\n",  # # Sources
-            r"(?i)\*\*sources\*\*\s*\n",  # **Sources**
-            r"(?i)sources:\s*\n",  # Sources:
-        ]
+        if match:
+            split_index = match.start()
+            main_content = content_with_sources[:split_index].strip()
+            sources_content = content_with_sources[split_index:].strip()
 
-        for pattern in source_patterns:
-            match = re.search(pattern, content_with_sources)
-            if match:
-                split_index = match.start()
-                main_content = content_with_sources[:split_index].strip()
-                sources_content = content_with_sources[split_index:].strip()
-                break
+        return main_content, sources_content
 
-        return metadata, main_content, sources_content
+    def _process_sources_html(self, sources_html: str) -> str:
+        """
+        Apply styling and transformations to the sources HTML content.
+        
+        Args:
+            sources_html: The HTML string of sources content
+            
+        Returns:
+            Processed HTML string with appropriate styling classes applied
+        """
+        if not sources_html.strip():
+            return ""
+
+        soup = BeautifulSoup(sources_html, "html.parser")
+        
+        # Apply sources list class to all lists in the sources
+        if "STYLING" in PDF_CONFIG and "SOURCES_LIST_CLASS" in PDF_CONFIG["STYLING"]:
+            sources_list_class = PDF_CONFIG["STYLING"]["SOURCES_LIST_CLASS"]
+            for ul in soup.find_all(["ul", "ol"]):
+                ul['class'] = ul.get('class', []) + [sources_list_class]
+        
+        # Process links for long URLs
+        if "SOURCES" in PDF_CONFIG and "MAX_URL_DISPLAY_LENGTH" in PDF_CONFIG["SOURCES"]:
+            max_display_len = PDF_CONFIG["SOURCES"]["MAX_URL_DISPLAY_LENGTH"]
+            for a in soup.find_all("a"):
+                url_text = a.get_text(strip=True)
+                # Only process URLs that look like actual URLs
+                if len(url_text) > max_display_len and url_text.startswith(("http://", "https://")):
+                    # Store original URL as title for hover
+                    a['title'] = url_text
+                    # Truncate the displayed text
+                    truncated_text = url_text[:max_display_len-3] + "..." 
+                    a.string = truncated_text
+                    
+                    # Add class for long URLs if defined in config
+                    if "STYLING" in PDF_CONFIG and "LONG_URL_CLASS" in PDF_CONFIG["STYLING"]:
+                        long_url_class = PDF_CONFIG["STYLING"]["LONG_URL_CLASS"]
+                        a['class'] = a.get('class', []) + [long_url_class]
+        
+        # Handle paragraph to list conversion if enabled
+        if "SOURCES" in PDF_CONFIG and PDF_CONFIG["SOURCES"].get("AUTO_CONVERT_PARAGRAPH_TO_LIST", False):
+            # Find paragraphs that look like they should be list items (starting with "•", "-", "*")
+            for p in soup.find_all("p"):
+                text = p.get_text().strip()
+                if text.startswith(("•", "-", "*")):
+                    # Create a new list item
+                    li = soup.new_tag("li")
+                    # Copy the paragraph content, removing the bullet character
+                    li.string = text[1:].strip()
+                    
+                    # Look for a nearby list to add to, or create a new one
+                    prev_sibling = p.find_previous_sibling(["ul", "ol"])
+                    next_sibling = p.find_next_sibling(["ul", "ol"])
+                    
+                    if prev_sibling and prev_sibling.name in ["ul", "ol"]:
+                        # Add to previous list
+                        prev_sibling.append(li)
+                        p.decompose()  # Remove original paragraph
+                    elif next_sibling and next_sibling.name in ["ul", "ol"]:
+                        # Add to next list
+                        next_sibling.insert(0, li)
+                        p.decompose()  # Remove original paragraph
+                    else:
+                        # Create a new list
+                        ul = soup.new_tag("ul")
+                        # Apply sources list class if configured
+                        if "STYLING" in PDF_CONFIG and "SOURCES_LIST_CLASS" in PDF_CONFIG["STYLING"]:
+                            ul['class'] = [PDF_CONFIG["STYLING"]["SOURCES_LIST_CLASS"]]
+                        ul.append(li)
+                        p.replace_with(ul)  # Replace paragraph with new list
+        
+        return str(soup)
 
 
 def process_markdown_files(
@@ -705,7 +957,7 @@ def process_markdown_files(
             title = section_id.replace("_", " ").title()
 
             # Create a section object
-            section = PDFSection(id=section_id, title=title, content=content)
+            section = PDFSection(id=section_id, title=title, raw_content=content)
 
             sections.append(section)
 
@@ -720,16 +972,12 @@ def process_markdown_files(
                 "company_name": company_name,
                 "language": language,
                 "report_type": "Analysis",
-                "logo": "templates/assets/supervity_logo.png",
-                "favicon": "templates/assets/supervity_favicon.png",
             },
         )
 
         return pdf_path
-
     except Exception as e:
-        print(f"Error generating PDF: {str(e)}")
+        print(f"Error processing markdown files: {str(e)}")
         import traceback
-
         traceback.print_exc()
         return None

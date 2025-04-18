@@ -790,6 +790,38 @@
         /* Section content styling */
         .section-content {
             margin-bottom: 2cm;
+            padding: 1cm 0; /* Add explicit padding */
+            position: relative; /* For debugging */
+            /* Uncomment for debugging
+            background-color: rgba(200, 200, 255, 0.1);
+            border: 1px solid #eee;
+            */
+        }
+        
+        /* Ensure proper page breaks */
+        .section-cover {
+            page-break-after: always !important; /* Force page break after section cover */
+        }
+        
+        .section-content {
+            page-break-before: auto; /* Allow content to start on same page if needed */
+            page-break-after: auto; /* Allow automatic page breaks */
+        }
+        
+        /* Avoid breaking these elements across pages */
+        table, figure, pre, blockquote {
+            page-break-inside: avoid !important;
+        }
+        
+        /* Prevent headings from being orphaned at bottom of page */
+        h2, h3, h4, h5, h6 {
+            page-break-after: avoid !important;
+        }
+        
+        /* Keep at least 2 lines together */
+        p, li {
+            orphans: 2;
+            widows: 2;
         }
 
         /* Enhanced list styles */
@@ -803,17 +835,17 @@
             margin-bottom: 0.3em;
             text-align: left;
         }
-        
+
         .nested-list {
             padding-left: 1.5em;
             margin: 0.5em 0;
             list-style-type: circle;
         }
-        
+
         .nested-list-item {
             margin-bottom: 0.2em;
         }
-        
+
         /* Paragraph list style for content that might not be processed as proper lists */
         p.bullet-point {
             position: relative;
@@ -821,8 +853,94 @@
             margin: 0.3em 0;
             text-align: left;
         }
-        
+
         p.bullet-point::before {
+            content: "•";
+            position: absolute;
+            left: 0.5em;
+            color: var(--navy-blue);
+        }
+
+        /* Additional styles for the main content and sources section */
+        .main-report-content {
+            /* Styling for the main content container */
+            margin: 0;
+            padding: 0;
+        }
+
+        .section-number {
+            font-weight: bold;
+            color: var(--navy-blue);
+            margin-right: 0.3em;
+        }
+
+        /* Final Sources Section - Improved Styling */
+        .final-sources-section {
+            page-break-before: always; /* Ensure sources start on a new page */
+            padding: 2cm 1cm 1cm 1cm; /* Adjust padding for better layout */
+            margin-top: 1cm; /* Space from previous content */
+            position: relative; /* For positioning elements */
+            /* Visual separation from main content */
+            border-top: 3px solid var(--lime-green);
+            background-color: rgba(248, 249, 250, 0.5);
+        }
+        
+        .final-sources-section h2 {
+            font-size: 18pt; /* Match section title size */
+            color: var(--navy-blue);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.5em;
+            margin-bottom: 1.5em; /* More space below heading */
+            text-align: center; /* Center the Sources heading */
+        }
+        
+        /* Styling for sources lists */
+        .sources-list {
+            padding-left: 2em; /* More indentation */
+            margin: 1.5em 0;
+            list-style-type: disc;
+        }
+        
+        .sources-list li {
+            margin-bottom: 0.75em; /* More space between sources */
+            text-align: left; /* Ensure left alignment */
+            line-height: 1.5; /* Better line height for readability */
+            color: var(--dark-gray);
+        }
+        
+        /* Specific styling for URL links in sources */
+        .sources-list a {
+            color: var(--soft-blue);
+            text-decoration: none;
+            border-bottom: 1px dotted var(--soft-blue); /* Subtle underline */
+        }
+        
+        .sources-list a:hover {
+            text-decoration: none;
+            border-bottom: 1px solid var(--soft-blue);
+        }
+        
+        /* Style for long URLs */
+        .long-url {
+            word-wrap: break-word;
+            word-break: break-all;
+            font-size: 0.9em;
+            font-family: monospace;
+            color: #7f8c8d; /* Muted color */
+            display: inline-block; /* Helps with wrapping */
+            max-width: 100%; /* Prevent overflow */
+        }
+        
+        /* Special styling for paragraphs in sources section */
+        .final-sources-section p {
+            margin: 0.75em 0;
+            padding-left: 1.5em;
+            position: relative; /* For bullet positioning */
+            text-align: left;
+        }
+        
+        /* Add bullets to paragraphs in sources when not in a list */
+        .final-sources-section > p:not(.no-bullet)::before {
             content: "•";
             position: absolute;
             left: 0.5em;
@@ -858,34 +976,45 @@
         {{ toc | safe }}
     </div>
 
-    <!-- Content Sections -->
-    {% for section in sections %}
-        <!-- Section Cover -->
-        <div class="section-cover">
-            <h2>{{ section.title }}</h2>
-            
-            <div class="subsections">
-                <h3>In this section:</h3>
-                {% if section.key_topics %}
-                    {% for topic in section.key_topics %}
-                    <p class="section-topic">• {{ topic }}</p>
-                    {% endfor %}
-                {% else %}
-                    <p class="section-topic">• {{ section.title }}</p>
-                {% endif %}
+    <!-- Main Report Content Container -->
+    <div class="main-report-content">
+        <!-- Content Sections -->
+        {% for section in sections %}
+            <!-- Section Cover -->
+            <div class="section-cover">
+                <h2>{{ section.title }}</h2>
+                
+                <div class="subsections">
+                    <h3>In this section:</h3>
+                    {% if section.key_topics %}
+                        {% for topic in section.key_topics %}
+                        <p class="section-topic">• {{ topic }}</p>
+                        {% endfor %}
+                    {% else %}
+                        <p class="section-topic">• {{ section.title }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="reading-time">
+                    Estimated reading time: <span class="reading-time-value">{{ section.reading_time }} minutes</span>
+                </div>
             </div>
-            
-            <div class="reading-time">
-                Estimated reading time: <span class="reading-time-value">{{ section.reading_time }} minutes</span>
-            </div>
-        </div>
 
-        <!-- Section Content -->
-        <div class="section-content">
-            <h2 id="section-{{ section.id }}">{{ section.title }}</h2>
-            {{ section.html_content | safe }}
-        </div>
-    {% endfor %}
+            <!-- Section Content -->
+            <div class="section-content">
+                <h2 id="section-{{ section.id }}"><span class="section-number">{{ loop.index }}.</span> {{ section.title }}</h2>
+                {{ section.main_html_content | safe }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Final Sources Section -->
+    {% if all_sources_html %}
+    <div class="final-sources-section">
+        <h2>Sources</h2>
+        {{ all_sources_html | safe }}
+    </div>
+    {% endif %}
 
     <!-- Attribution -->
     <div class="attribution">
