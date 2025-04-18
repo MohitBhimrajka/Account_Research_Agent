@@ -1,5 +1,5 @@
 // FILE: account-research-ui/src/pages/generate/steps/TargetCompanyStep.tsx
-import { WizardProvider, type FormValues, useWizardForm } from '../../../contexts/WizardContext';
+import { useWizardForm } from '../../../contexts/WizardContext';
 import { Building } from 'lucide-react';
 
 export function TargetCompanyStep() {

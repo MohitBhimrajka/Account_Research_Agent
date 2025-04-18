@@ -36,15 +36,16 @@ class EnhancedPDFGenerator:
 
     def __init__(self, template_path: Optional[str] = None):
         """Initialize the PDF generator with an optional custom template path."""
+        # Reliably determine project root
+        self.project_root = Path(__file__).resolve().parent.parent.parent.parent
+        print(f"Project root determined as: {self.project_root}")
+        
         if template_path:
             self.template_dir = str(Path(template_path).parent)
             self.template_name = Path(template_path).name
         else:
-            # Adjusted to handle new path location
-            module_path = Path(
-                __file__
-            ).parent.parent.parent.parent  # Go up to project root
-            self.template_dir = str(module_path / "templates")
+            # Use project_root for template directory
+            self.template_dir = str(self.project_root / "templates")
             self.template_name = "enhanced_report_template.html"
 
         self.env = Environment(
@@ -347,18 +348,35 @@ class EnhancedPDFGenerator:
         # Process all sections
         processed_sections = self._process_sections(sections_data)
 
-        # Set default logo and favicon for simplicity
-        base_url = str(Path.cwd())
-        logo_url = metadata.get("logo", "templates/assets/supervity_logo.png")
-        favicon_url = metadata.get("favicon", "templates/assets/supervity_favicon.png")
-
-        print(f"Using logo URL: {logo_url}")
-        print(f"Using favicon URL: {favicon_url}")
+        # Use project_root consistently for all paths
+        base_url = self.project_root.as_uri()
+        
+        # Get paths for logo and favicon
+        logo_path = self.project_root / "templates/assets/supervity_logo.png"
+        favicon_path = self.project_root / "templates/assets/supervity_favicon.png"
+        
+        # Override with metadata if provided
+        if metadata.get("logo"):
+            custom_logo = Path(metadata.get("logo"))
+            if custom_logo.exists():
+                logo_path = custom_logo.resolve()
+            else:
+                print(f"Warning: Logo path {custom_logo} does not exist, using default")
+                
+        if metadata.get("favicon"):
+            custom_favicon = Path(metadata.get("favicon"))
+            if custom_favicon.exists():
+                favicon_path = custom_favicon.resolve()
+            else:
+                print(f"Warning: Favicon path {custom_favicon} does not exist, using default")
+        
+        # Convert to file:// URLs after checking existence
+        logo_file_url = logo_path.as_uri() if logo_path.exists() else None
+        favicon_file_url = favicon_path.as_uri() if favicon_path.exists() else None
+        
+        print(f"Using logo URL: {logo_file_url}")
+        print(f"Using favicon URL: {favicon_file_url}")
         print(f"Using base URL: {base_url}")
-
-        # Check if logo exists, use a default if not
-        if not Path(logo_url).exists():
-            logo_url = str(Path(base_url) / "templates/assets/supervity_logo.png")
 
         # Generate TOC
         toc_html = self._generate_toc(processed_sections)
@@ -374,8 +392,8 @@ class EnhancedPDFGenerator:
             date=formatted_date,
             sections=processed_sections,
             toc=toc_html,
-            logo_url=logo_url,
-            favicon_url=favicon_url,
+            logo_url=logo_file_url,
+            favicon_url=favicon_file_url,
             section_order=SECTION_ORDER,
             pdf_config=PDF_CONFIG,
         )
@@ -384,15 +402,15 @@ class EnhancedPDFGenerator:
         font_config = FontConfiguration()
         html = HTML(string=html_content, base_url=base_url)
 
-        # Define CSS for the PDF
+        # Define CSS for the PDF using project_root for path resolution
         css_files = [
-            str(Path(base_url) / "templates/css/pdf.css"),
-            str(Path(base_url) / "templates/css/github-markdown.css"),
-            str(Path(base_url) / "templates/css/highlight.css"),
+            (self.project_root / "templates/css/pdf.css"),
+            (self.project_root / "templates/css/github-markdown.css"),
+            (self.project_root / "templates/css/highlight.css"),
         ]
 
         css = [
-            CSS(filename=css_file) for css_file in css_files if Path(css_file).exists()
+            CSS(filename=str(css_file)) for css_file in css_files if css_file.exists()
         ]
 
         # If no CSS files exist, use default styles
@@ -589,11 +607,17 @@ class EnhancedPDFGenerator:
             )
             css = [default_css]
 
-        # Generate the PDF
-        html.write_pdf(output_path, stylesheets=css, font_config=font_config)
-
-        print(f"PDF generated successfully: {output_path}")
-        return Path(output_path)
+        # Generate the PDF with proper error handling
+        try:
+            html.write_pdf(output_path, stylesheets=css, font_config=font_config)
+            print(f"PDF generated successfully: {output_path}")
+            return Path(output_path)
+        except Exception as e:
+            print(f"Error generating PDF: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Return the path anyway in case the file was partially created
+            return Path(output_path) if Path(output_path).exists() else None
 
     def _cleanup_raw_markdown(self, content: str) -> str:
         """Clean up raw markdown content before processing."""

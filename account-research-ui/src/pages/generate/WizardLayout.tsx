@@ -27,8 +27,7 @@ function WizardForm() {
   const navigate = useNavigate();
   const {
     handleSubmit, // Use handleSubmit directly from react-hook-form
-    formState: { errors, isValid, touchedFields, isDirty },
-    getValues,
+    formState: { errors, isValid, touchedFields },
     trigger,
     currentStep,
     setCurrentStep
@@ -49,24 +48,28 @@ function WizardForm() {
   });
   
   const handleNext = async () => {
-    // Trigger validation for the current step's fields
+    console.log("handleNext TRIGGERED"); // Add this log
+    console.log(`WizardForm: handleNext called at step ${currentStep}`); // Add log
     const fieldsToValidate = steps[currentStep].fields;
     const isValidStep = await trigger(fieldsToValidate);
+    console.log(`WizardForm: Step ${currentStep} validation result: ${isValidStep}`); // Log validation
 
     if (isValidStep && currentStep < steps.length - 1) {
       setCurrentStep(prev => {
         const nextStep = prev + 1;
-        console.log(`WizardForm: Advancing to step ${nextStep}`); // Add log
+        console.log(`WizardForm: Validation successful, advancing to step ${nextStep}`); // Log advancement
         return nextStep;
       });
-      // Clear any previous API errors when moving to next step
       if (apiError) setApiError(null);
     } else if (!isValidStep) {
-      console.log("Validation failed for step", currentStep, errors);
+      console.log(`WizardForm: Validation failed for step ${currentStep}`, errors); // Log validation failure
+    } else {
+      console.log(`WizardForm: Already at last step or condition not met (currentStep: ${currentStep})`); // Log edge case
     }
   };
 
   const handleBack = () => {
+    console.log("handleBack TRIGGERED"); // Add this log
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
       // Clear any previous API errors when moving back
@@ -76,6 +79,7 @@ function WizardForm() {
 
   // This is the actual function passed to RHF's handleSubmit
   const processFormSubmit = async (data: FormValues) => {
+    console.log("processFormSubmit TRIGGERED"); // Add this log
     setApiError(null);
     setIsSubmitting(true);
     console.log('Submitting data:', data);
@@ -115,7 +119,15 @@ function WizardForm() {
       console.log('API Payload:', payload);
       const { task_id } = await api.createTask(payload);
       console.log('Task created with ID:', task_id);
+      
+      // --- Add log BEFORE navigation ---
+      console.log(`WizardForm: Attempting to navigate to /task/${task_id}`);
+      
       navigate(`/task/${task_id}`);
+      
+      // --- Add log AFTER navigation call (might not execute if navigation unmounts component) ---
+      console.log(`WizardForm: Navigation to /task/${task_id} called.`);
+      
     } catch (error: any) {
       console.error('Error creating task:', error);
       setApiError(
@@ -137,13 +149,11 @@ function WizardForm() {
   // Determine if the current step has validation errors
   const hasCurrentStepErrors = steps[currentStep].fields.some(field => !!errors[field]);
 
-  // Determine if the current step is valid
-  const isCurrentStepValid = () => {
-    const currentFields = steps[currentStep].fields;
-    // Check if all fields in the current step have been touched and have no errors
-    return currentFields.every(field => touchedFields[field] && !errors[field]);
-  };
-
+  console.log(`WizardForm (Child): Rendering with currentStep from context = ${currentStep}`); // Add this log
+  
+  // Log before rendering step component
+  console.log(`WizardForm: About to render step component index ${currentStep}`);
+  
   return (
     // Use RHF's handleSubmit to wrap the actual submission logic
     <form onSubmit={handleSubmit(processFormSubmit)} className="space-y-8">
@@ -208,7 +218,8 @@ function WizardForm() {
 // Main layout component
 export default function WizardLayout() {
   const [currentStep, setCurrentStep] = useState(0);
-
+  console.log(`WizardLayout (Parent): Rendering with currentStep = ${currentStep}`); // Add this log
+  
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-primary p-4 md:p-8 flex items-center justify-center">
       <div className="w-full max-w-3xl bg-navy rounded-2xl shadow-xl p-6 md:p-10"> {/* Increased padding */}

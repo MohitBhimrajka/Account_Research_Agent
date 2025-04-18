@@ -15,7 +15,6 @@ import {
   Mail,
   Briefcase,
   Lightbulb,
-  FileText,
 } from 'lucide-react';
 
 import api, { Task } from '../api/client';
@@ -244,6 +243,40 @@ export default function ProgressPage() {
   // Only show progress UI when we have user info and a valid task ID
   const showProgressUI = hasUserInfo && id && !isCheckingStorage;
 
+  // --- ADD Initial Loading/Error Render BEFORE User Info Logic ---
+  if (isTaskLoading && !task) { // Handle initial load specifically
+      return (
+          <div className="min-h-[calc(100vh-4rem)] bg-primary p-6 flex items-center justify-center">
+              <div className="text-center text-white animate-fadeIn">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-lime" />
+              <p className="text-xl">Loading task status...</p>
+              </div>
+          </div>
+      );
+  }
+
+  if (taskError) { // Handle query error state
+      return (
+          <div className="min-h-[calc(100vh-4rem)] bg-primary p-6 flex items-center justify-center">
+              <div className="w-full max-w-lg bg-navy rounded-xl p-6 shadow-lg text-center animate-fadeIn">
+                  <AlertCircle className="w-12 h-12 text-orange mx-auto mb-4" />
+                  <h2 className="text-xl font-semibold text-white mb-2">Error Loading Task</h2>
+                  <p className="text-gray-lt mb-6 text-sm">
+                      Could not retrieve task status: {taskError.message}
+                  </p>
+                  <Button
+                      variant="outline"
+                      className="text-white border-gray-dk hover:bg-navy hover:border-lime hover:text-lime"
+                      onClick={() => navigate('/history')}
+                  >
+                      Go to History
+                  </Button>
+              </div>
+          </div>
+      );
+  }
+  // --- End of Added Initial Render Logic ---
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-primary text-foreground p-4 md:p-8 flex items-center justify-center">
       <div className="w-full max-w-3xl">
@@ -335,30 +368,12 @@ export default function ProgressPage() {
           </DialogPortal>
         </Dialog>
 
-        {/* Main Progress Display Area */}
-        {showProgressUI && (
+        {/* Main Progress Display Area - Conditionally render based on task existence */}
+        {showProgressUI && task ? (
           <div className="bg-navy rounded-xl p-6 md:p-8 shadow-lg animate-fadeIn">
             <h1 className="text-2xl font-bold text-white mb-6 text-center">Generating Your Report</h1>
 
-            {isTaskLoading && !task && ( // Initial loading state
-              <div className="text-center py-10">
-                <Loader2 className="w-8 h-8 text-lime animate-spin mx-auto mb-4" />
-                <p className="text-white">Loading task status...</p>
-              </div>
-            )}
-
-            {taskError && ( // Error fetching task status
-              <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-4 rounded-lg text-center">
-                <AlertCircle className="w-6 h-6 mx-auto mb-2"/>
-                <h3 className="font-semibold mb-1">Error Loading Task</h3>
-                <p className="text-sm mb-4">Could not retrieve task status. Please check the task ID or try again later.</p>
-                <Button variant="outline" onClick={() => window.location.reload()} className="text-white border-gray-dk hover:bg-gray-dk">
-                  Refresh Page
-                </Button>
-              </div>
-            )}
-
-            {task?.status === 'failed' && ( // Task processing failed
+            {task?.status === 'failed' && (
               <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-4 rounded-lg text-center">
                 <XCircle className="w-6 h-6 mx-auto mb-2"/>
                 <h3 className="font-semibold mb-1">Task Failed</h3>
@@ -369,7 +384,7 @@ export default function ProgressPage() {
               </div>
             )}
 
-            {task && task.status !== 'failed' && task.status !== 'completed' && ( // Task is pending or processing
+            {task && task.status !== 'failed' && task.status !== 'completed' && (
               <>
                 {/* Progress Bar */}
                 <div className="mb-6">
@@ -415,7 +430,7 @@ export default function ProgressPage() {
               </>
             )}
             
-            {task && task.status === 'completed' && ( // Briefly show completion message before redirect
+            {task && task.status === 'completed' && (
               <div className="text-center py-10 text-lime">
                 <CheckCircle className="w-8 h-8 mx-auto mb-3" />
                 <p className="font-semibold">Report Generated Successfully!</p>
@@ -423,6 +438,12 @@ export default function ProgressPage() {
               </div>
             )}
           </div>
+        ) : showProgressUI && !task && !isTaskLoading ? (
+          // Case where user info is present, but task data is missing after loading finished (should ideally be caught by taskError)
+          <div className="text-center text-orange">Task data not found.</div>
+        ) : (
+          // Loading state while checking storage (already handled above) or if !showProgressUI
+          isCheckingStorage && <div className="text-center py-10"><Loader2 className="w-8 h-8 text-lime animate-spin mx-auto mb-3" /><p className="text-white">Preparing...</p></div>
         )}
       </div>
     </div>
