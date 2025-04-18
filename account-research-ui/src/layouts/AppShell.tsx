@@ -15,8 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="container flex h-16 max-w-screen-2xl items-center mx-auto px-4 sm:px-6 lg:px-8"> {/* Added padding and centering */}
           <div className="mr-4 flex">
             <Link to="/" className="mr-6 flex items-center space-x-2">
-              {/* Optional: Add logo here */}
-              {/* <img src="/path/to/supervity-logo.svg" alt="Supervity Logo" className="h-8 w-auto" /> */}
+              <img src="/supervity_logo.png" alt="Supervity Logo" className="h-8 w-auto" />
               <span className="text-lg font-bold text-lime"> {/* Lime text */}
                 Account Research AI Agent
               </span>

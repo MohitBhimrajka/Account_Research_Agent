@@ -6,6 +6,7 @@ import { Rocket, History } from 'lucide-react';
 export default function LandingPage() {
   return (
     <main className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center bg-primary text-foreground p-6 text-center"> {/* Use theme colors */}
+      <img src="/supervity_logo.png" alt="Supervity Logo" className="h-16 w-auto mb-8" />
       <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-4 leading-tight">
         Account Research <span className="text-lime">AI Agent</span> {/* Highlight AI */}
       </h1>
