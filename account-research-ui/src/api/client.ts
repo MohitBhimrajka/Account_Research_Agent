@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { FormValues } from '../pages/generate/WizardContext';
+import { FormValues } from '../contexts/WizardContext';
 
 // Create axios instance with configuration
 const apiClient = axios.create({
@@ -11,16 +11,32 @@ const apiClient = axios.create({
 });
 
 // Types
-export type GenerationRequest = FormValues;
+export type GenerationPayload = {
+  company_name: string;
+  platform_company_name: string;
+  language_key: string;
+  sections: string[];
+};
 
 export interface Task {
-  id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress?: number;
+  task_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
   created_at: string;
   updated_at: string;
-  request: GenerationRequest;
+  completed_at?: string;
+  request?: {
+    company_name: string;
+    platform_company_name: string;
+    language_key: string;
+    sections: string[];
+  };
   error?: string;
+  result?: {
+    token_stats?: any;
+    base_dir?: string;
+    pdf_path?: string;
+  };
 }
 
 // API functions
@@ -28,7 +44,7 @@ export const api = {
   /**
    * Create a new research task
    */
-  async createTask(payload: GenerationRequest): Promise<{ task_id: string }> {
+  async createTask(payload: GenerationPayload): Promise<{ task_id: string }> {
     const response = await apiClient.post('/generate', payload);
     return response.data;
   },
@@ -56,7 +72,14 @@ export const api = {
    */
   async listTasks(): Promise<Task[]> {
     const response = await apiClient.get('/tasks');
-    return response.data;
+    
+    // The backend now returns an array of TaskStatus objects
+    const tasks: Task[] = response.data;
+    
+    // Sort tasks by created_at in descending order (newest first)
+    return tasks.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 };
 

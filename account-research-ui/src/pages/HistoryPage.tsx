@@ -21,7 +21,7 @@ const statusVariant = (status: string) => {
   switch (status) {
     case 'completed':
       return 'success';
-    case 'processing':
+    case 'running':
     case 'pending':
       return 'info';
     case 'failed':
@@ -57,9 +57,9 @@ export default function HistoryPage() {
   // View task result or progress
   const handleViewTask = (task: Task) => {
     if (task.status === 'completed') {
-      navigate(`/task/${task.id}/result`);
+      navigate(`/task/${task.task_id}/result`);
     } else {
-      navigate(`/task/${task.id}`);
+      navigate(`/task/${task.task_id}`);
     }
   };
 
@@ -104,15 +104,17 @@ export default function HistoryPage() {
               </TableHeader>
               <TableBody>
                 {tasks.map((task) => (
-                  <TableRow key={task.id}>
+                  <TableRow key={task.task_id}>
                     <TableCell className="font-medium text-white">
-                      {task.id.substring(0, 8)}...
+                      {task.task_id.substring(0, 8)}...
                     </TableCell>
                     <TableCell className="text-white">
-                      {task.request.targetCompany || 'N/A'}
+                      {task.request?.company_name || 'N/A'}
                     </TableCell>
                     <TableCell className="text-white">
-                      {task.request.language || 'English'}
+                      {task.request?.language_key === '2' ? 'English' : 
+                       task.request?.language_key === '1' ? 'German' : 
+                       'English'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(task.status)}>

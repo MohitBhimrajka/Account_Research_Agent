@@ -24,7 +24,7 @@ function WizardForm() {
   const navigate = useNavigate();
   const {
     handleSubmit, // Use handleSubmit directly from react-hook-form
-    formState: { errors, isValid, touchedFields },
+    formState: { errors, isValid, touchedFields, isDirty },
     getValues,
     trigger,
     currentStep,
@@ -40,6 +40,8 @@ function WizardForm() {
 
     if (isValidStep && currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
+      // Clear any previous API errors when moving to next step
+      if (apiError) setApiError(null);
     } else {
       // Optionally show validation errors if needed, though react-hook-form usually handles this
       console.log("Validation failed for step", currentStep, errors);
@@ -49,22 +51,25 @@ function WizardForm() {
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
+      // Clear any previous API errors when moving back
+      if (apiError) setApiError(null);
     }
   };
 
   // This is the actual function passed to RHF's handleSubmit
   const processFormSubmit = async (data: FormValues) => {
-    setIsSubmitting(true);
+    // Clear any previous error state
     setApiError(null);
+    setIsSubmitting(true);
     console.log('Submitting data:', data);
 
     // Find the language key corresponding to the selected language value
-    const languageKey = Object.keys(AVAILABLE_LANGUAGES).find(
-      key => AVAILABLE_LANGUAGES[key as keyof typeof AVAILABLE_LANGUAGES] === data.language
-    );
+    const languageKey = Object.entries(AVAILABLE_LANGUAGES).find(
+      ([_, value]) => value === data.language
+    )?.[0];
 
     if (!languageKey) {
-        setApiError("Selected language is invalid.");
+        setApiError("Selected language is invalid or not configured properly.");
         setIsSubmitting(false);
         return;
     }
@@ -72,17 +77,22 @@ function WizardForm() {
     try {
       const payload = {
           company_name: data.targetCompany,
-          platform_company_name: data.userCompany, // Ensure backend expects this field
-          language_key: languageKey, // Send the key ('1', '2', etc.)
-          sections: data.sections || [] // Ensure sections is always an array
+          platform_company_name: data.userCompany, 
+          language_key: languageKey, 
+          sections: data.sections || [] 
       };
       console.log('API Payload:', payload);
       const { task_id } = await api.createTask(payload);
       console.log('Task created with ID:', task_id);
       navigate(`/task/${task_id}`);
+      // No need to set isSubmitting to false after successful navigation
     } catch (error: any) {
       console.error('Error creating task:', error);
-      setApiError(error.response?.data?.detail || error.message || 'Failed to create task. Please try again.');
+      setApiError(
+        error.response?.data?.detail || 
+        error.message || 
+        'Failed to create task. Please try again.'
+      );
       setIsSubmitting(false);
     }
   };
@@ -94,11 +104,14 @@ function WizardForm() {
     <OptionsStep key="options" />,
   ];
 
+  // Determine if the current step has validation errors
+  const hasCurrentStepErrors = steps[currentStep].fields.some(field => !!errors[field]);
+
   // Determine if the current step is valid
   const isCurrentStepValid = () => {
-      const currentFields = steps[currentStep].fields;
-      // Check if all fields in the current step have been touched and have no errors
-      return currentFields.every(field => touchedFields[field] && !errors[field]);
+    const currentFields = steps[currentStep].fields;
+    // Check if all fields in the current step have been touched and have no errors
+    return currentFields.every(field => touchedFields[field] && !errors[field]);
   };
 
   return (
@@ -131,8 +144,8 @@ function WizardForm() {
             variant="primary" // Use accent color for Next
             type="button"
             onClick={handleNext}
-            // Disable if current step fields have errors
-            disabled={steps[currentStep].fields.some(field => errors[field])}
+            // Disable if current step fields have errors or is submitting
+            disabled={hasCurrentStepErrors || isSubmitting}
             className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
           >
             Next

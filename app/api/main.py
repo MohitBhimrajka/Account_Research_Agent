@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import asyncio
 import logging
 
@@ -59,7 +59,7 @@ class GenerationRequest(BaseModel):
     company_name: str
     platform_company_name: str = ""
     language_key: str = "2"  # Default to English
-    sections: List[int] = []  # Empty list means all sections
+    sections: List[str] = Field(default_factory=list)  # Empty list means all sections
 
 
 class TaskResponse(BaseModel):
@@ -76,9 +76,12 @@ class TaskStatus(BaseModel):
     task_id: str
     status: str
     created_at: str
+    updated_at: Optional[str] = None
     completed_at: Optional[str] = None
     progress: float = 0.0
     result: Optional[Dict[str, Any]] = None
+    request: Optional[GenerationRequest] = None
+    error: Optional[str] = None
 
 
 def process_generation_task(
@@ -86,11 +89,12 @@ def process_generation_task(
     company_name: str,
     platform_company_name: str,
     language_key: str,
-    section_indices: List[int],
+    section_ids: List[str],
 ):
     """Process a generation task in the background."""
     try:
         TASKS[task_id]["status"] = "running"
+        TASKS[task_id]["updated_at"] = datetime.now().isoformat()
 
         # Determine language
         if language_key not in AVAILABLE_LANGUAGES:
@@ -98,16 +102,34 @@ def process_generation_task(
         language = AVAILABLE_LANGUAGES[language_key]
 
         # Determine which sections to generate
-        if not section_indices:
+        if not section_ids:
             # Generate all sections
+            logger.info(f"No specific sections requested for task {task_id}, generating all sections")
             selected_prompts = PROMPT_FUNCTIONS
         else:
             selected_prompts = []
-            for idx in section_indices:
-                if 1 <= idx <= len(PROMPT_FUNCTIONS):
-                    selected_prompts.append(PROMPT_FUNCTIONS[idx - 1])
+            invalid_sections = []
+            
+            # Extract function IDs from PROMPT_FUNCTIONS for comparison
+            available_section_ids = [section_id for section_id, _, _ in PROMPT_FUNCTIONS]
+            
+            for section_id in section_ids:
+                # Find the matching prompt function by section_id (first element in tuple)
+                matching_prompts = [prompt for prompt in PROMPT_FUNCTIONS if prompt[0] == section_id]
+                
+                if matching_prompts:
+                    selected_prompts.append(matching_prompts[0])
                 else:
-                    raise ValueError(f"Invalid section index: {idx}")
+                    invalid_sections.append(section_id)
+            
+            if invalid_sections:
+                logger.warning(f"Invalid section IDs for task {task_id}: {invalid_sections}")
+            
+            logger.info(f"Selected {len(selected_prompts)} sections for task {task_id}: {[p[0] for p in selected_prompts]}")
+            
+            if not selected_prompts:
+                logger.warning(f"No valid sections found for task {task_id}, falling back to all sections")
+                selected_prompts = PROMPT_FUNCTIONS
 
         # Run the generation
         token_stats, base_dir = run_generation(
@@ -127,6 +149,7 @@ def process_generation_task(
             {
                 "status": "completed",
                 "completed_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
                 "progress": 1.0,
                 "result": {
                     "token_stats": token_stats,
@@ -142,6 +165,7 @@ def process_generation_task(
             {
                 "status": "failed",
                 "completed_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
                 "error": str(e),
             }
         )
@@ -163,6 +187,8 @@ async def generate_pdf(request: GenerationRequest, background_tasks: BackgroundT
         "task_id": task_id,
         "status": "pending",
         "created_at": now,
+        "updated_at": now,
+        "progress": 0.0,
         "request": request.dict(),
     }
 
@@ -184,8 +210,24 @@ async def get_task_status(task_id: str):
     """Get the status of a task."""
     if task_id not in TASKS:
         raise HTTPException(status_code=404, detail="Task not found")
-
-    return TaskStatus(**TASKS[task_id])
+    
+    task_data = TASKS[task_id].copy()
+    
+    # Ensure all required fields are available
+    if "updated_at" not in task_data:
+        task_data["updated_at"] = task_data["created_at"]
+    
+    # Convert stored request dict back to GenerationRequest model if it exists
+    if "request" in task_data and task_data["request"]:
+        try:
+            # Validate against the model
+            task_data["request"] = GenerationRequest(**task_data["request"])
+        except Exception as e:
+            logger.warning(f"Error validating request data for task {task_id}: {str(e)}")
+            # Provide a fallback if validation fails
+            task_data["request"] = None
+    
+    return TaskStatus(**task_data)
 
 
 @app.get("/result/{task_id}/pdf")
@@ -214,18 +256,41 @@ async def get_pdf_result(task_id: str):
     )
 
 
-@app.get("/tasks")
+@app.get("/tasks", response_model=List[TaskStatus])
 async def list_tasks():
     """List all tasks."""
-    return {
-        task_id: {
-            "task_id": task_id,
-            "status": task["status"],
-            "created_at": task["created_at"],
-            "completed_at": task.get("completed_at"),
-        }
-        for task_id, task in TASKS.items()
-    }
+    task_list = []
+    
+    for task_id, task_data in TASKS.items():
+        try:
+            # Create a copy to avoid modifying the original data
+            task_copy = task_data.copy()
+            
+            # Ensure all required fields are available
+            if "updated_at" not in task_copy:
+                task_copy["updated_at"] = task_copy["created_at"]
+                
+            # Convert stored request dict back to GenerationRequest model if it exists
+            if "request" in task_copy and task_copy["request"]:
+                try:
+                    task_copy["request"] = GenerationRequest(**task_copy["request"])
+                except Exception as e:
+                    logger.warning(f"Error validating request data for task {task_id}: {str(e)}")
+                    task_copy["request"] = None
+                    
+            # Add the task_id field if not present
+            task_copy["task_id"] = task_id
+            
+            # Create a TaskStatus object and append to list
+            task_list.append(TaskStatus(**task_copy))
+            
+        except Exception as e:
+            logger.error(f"Error processing task {task_id} for listing: {str(e)}")
+    
+    # Sort tasks by created_at in descending order (newest first)
+    task_list.sort(key=lambda x: x.created_at, reverse=True)
+    
+    return task_list
 
 
 @app.get("/languages")
