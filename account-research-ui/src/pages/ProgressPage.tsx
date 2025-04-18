@@ -1,7 +1,7 @@
 // FILE: account-research-ui/src/pages/ProgressPage.tsx
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -112,6 +112,7 @@ const getTaskLogs = (taskStatus: string | undefined, progress: number | undefine
 export default function ProgressPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false);
   const [hasUserInfo, setHasUserInfo] = useState(false);
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
@@ -119,6 +120,19 @@ export default function ProgressPage() {
   // Check local storage for user info on component mount
   useEffect(() => {
     const checkUserInfo = () => {
+      const taskQueryResult = queryClient.getQueryState(['taskStatus', id]);
+      if (taskQueryResult?.status === 'pending' || taskQueryResult?.fetchStatus === 'fetching') {
+          console.log('ProgressPage: Skipping user info check while task status is loading or fetching.');
+          setIsCheckingStorage(false);
+          return;
+      }
+      if (String(taskQueryResult?.status) === 'error') {
+          console.log('ProgressPage: Skipping user info check because task status query failed.');
+          setIsCheckingStorage(false);
+          setUserInfoDialogOpen(false);
+          return;
+      }
+
       setIsCheckingStorage(true);
       const storedUserInfo = localStorage.getItem('userInfo');
       
@@ -129,16 +143,38 @@ export default function ProgressPage() {
           // Check if all required fields are present
           if (parsedInfo.name && parsedInfo.email && parsedInfo.designation) {
             setHasUserInfo(true);
+            setUserInfoDialogOpen(false); // Explicitly close if info is valid
           } else {
             localStorage.removeItem('userInfo'); // Clear invalid data
-            setUserInfoDialogOpen(true);
+            // Only show if task is likely valid and not failed
+            if (taskQueryResult && String(taskQueryResult.status) === 'error') {
+              console.log('ProgressPage: Invalid user info, but task query failed, keeping dialog closed.');
+              setUserInfoDialogOpen(false);
+            } else {
+              console.log('ProgressPage: Invalid user info found, opening dialog.');
+              setUserInfoDialogOpen(true);
+            }
           }
         } catch {
           localStorage.removeItem('userInfo'); // Clear invalid data
-          setUserInfoDialogOpen(true);
+          // Only show if task is likely valid and not failed
+          if (taskQueryResult && String(taskQueryResult.status) === 'error') {
+            console.log('ProgressPage: Invalid user info format, but task query failed, keeping dialog closed.');
+            setUserInfoDialogOpen(false);
+          } else {
+            console.log('ProgressPage: Invalid user info format, opening dialog.');
+            setUserInfoDialogOpen(true);
+          }
         }
       } else {
-        setUserInfoDialogOpen(true); // Open dialog if not found
+        // Only show if task is likely valid and not failed
+        if (taskQueryResult && String(taskQueryResult.status) === 'error') {
+          console.log('ProgressPage: No user info, but task query failed, keeping dialog closed.');
+          setUserInfoDialogOpen(false);
+        } else {
+          console.log('ProgressPage: No user info found, opening dialog.');
+          setUserInfoDialogOpen(true);
+        }
       }
       setIsCheckingStorage(false);
     };
@@ -146,7 +182,7 @@ export default function ProgressPage() {
     // Small delay to ensure smooth UI transition
     const timer = setTimeout(checkUserInfo, 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [id, queryClient]);
 
   // Form handling for user info
   const {

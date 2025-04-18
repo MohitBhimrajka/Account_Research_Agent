@@ -54,11 +54,14 @@ function WizardForm() {
     const isValidStep = await trigger(fieldsToValidate);
 
     if (isValidStep && currentStep < steps.length - 1) {
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep(prev => {
+        const nextStep = prev + 1;
+        console.log(`WizardForm: Advancing to step ${nextStep}`); // Add log
+        return nextStep;
+      });
       // Clear any previous API errors when moving to next step
       if (apiError) setApiError(null);
-    } else {
-      // Optionally show validation errors if needed, though react-hook-form usually handles this
+    } else if (!isValidStep) {
       console.log("Validation failed for step", currentStep, errors);
     }
   };
@@ -168,8 +171,8 @@ function WizardForm() {
 
         {currentStep < steps.length - 1 ? (
           <Button
-            variant="primary" // Use accent color for Next
-            type="button"
+            variant="primary" 
+            type="button" // CRITICAL: Must be type="button"
             onClick={handleNext}
             // Disable if current step fields have errors or is submitting
             disabled={hasCurrentStepErrors || isSubmitting}
@@ -180,8 +183,8 @@ function WizardForm() {
           </Button>
         ) : (
           <Button
-            variant="primary" // Use accent color for Submit
-            type="submit"
+            variant="primary"
+            type="submit" // CRITICAL: Must be type="submit"
             // Disable if form is invalid or submitting
             disabled={!isValid || isSubmitting}
             className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
