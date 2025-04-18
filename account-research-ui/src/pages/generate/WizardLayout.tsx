@@ -10,7 +10,10 @@ import { OptionsStep } from './steps/OptionsStep';
 import api from '../../api/client';
 import { useWizardForm } from '../../contexts/WizardContext';
 import { Loader2, Send, ArrowLeft, ArrowRight } from 'lucide-react'; // Import icons
-import { AVAILABLE_LANGUAGES } from '../../config'; // Import backend config
+import { useQuery } from '@tanstack/react-query';
+
+// Define the type for the languages map from the API
+type LanguagesMap = Record<string, string>;
 
 // Define steps in the desired order
 const steps = [
@@ -33,6 +36,18 @@ function WizardForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Fetch languages data using useQuery
+  const { data: availableLanguages, isLoading: isLoadingLanguages, error: languagesError } = useQuery<LanguagesMap>({
+    queryKey: ['languages'], // Use the same query key to potentially hit cache
+    queryFn: async () => {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/languages`);
+        if (!response.ok) throw new Error('Failed to fetch languages for submission');
+        return response.json();
+    },
+    staleTime: Infinity,
+    enabled: !isSubmitting, // Only fetch if not already submitting
+  });
+  
   const handleNext = async () => {
     // Trigger validation for the current step's fields
     const fieldsToValidate = steps[currentStep].fields;
@@ -58,13 +73,26 @@ function WizardForm() {
 
   // This is the actual function passed to RHF's handleSubmit
   const processFormSubmit = async (data: FormValues) => {
-    // Clear any previous error state
     setApiError(null);
     setIsSubmitting(true);
     console.log('Submitting data:', data);
 
+    // Wait if languages are still loading for the lookup
+    if (isLoadingLanguages) {
+        console.log('Waiting for languages map to load...');
+        setApiError("Language configuration still loading, please wait...");
+        setIsSubmitting(false);
+        return; // Or potentially add a short delay/retry?
+    }
+
+    if (languagesError || !availableLanguages) {
+      setApiError(`Failed to load language configuration: ${languagesError?.message || 'Unknown error'}`);
+      setIsSubmitting(false);
+      return;
+    }
+
     // Find the language key corresponding to the selected language value
-    const languageKey = Object.entries(AVAILABLE_LANGUAGES).find(
+    const languageKey = Object.entries(availableLanguages).find(
       ([_, value]) => value === data.language
     )?.[0];
 
@@ -77,20 +105,19 @@ function WizardForm() {
     try {
       const payload = {
           company_name: data.targetCompany,
-          platform_company_name: data.userCompany, 
-          language_key: languageKey, 
-          sections: data.sections || [] 
+          platform_company_name: data.userCompany,
+          language_key: languageKey,
+          sections: data.sections || []
       };
       console.log('API Payload:', payload);
       const { task_id } = await api.createTask(payload);
       console.log('Task created with ID:', task_id);
       navigate(`/task/${task_id}`);
-      // No need to set isSubmitting to false after successful navigation
     } catch (error: any) {
       console.error('Error creating task:', error);
       setApiError(
-        error.response?.data?.detail || 
-        error.message || 
+        error.response?.data?.detail ||
+        error.message ||
         'Failed to create task. Please try again.'
       );
       setIsSubmitting(false);

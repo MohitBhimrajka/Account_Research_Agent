@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Import our core functionality
 from app.core.tasks import run_generation
 from app.core.generator import process_markdown_files
-from config import AVAILABLE_LANGUAGES, PROMPT_FUNCTIONS, LLM_MODEL, LLM_TEMPERATURE
+from config import AVAILABLE_LANGUAGES, PROMPT_FUNCTIONS, LLM_MODEL, LLM_TEMPERATURE, SECTION_ORDER
 
 # Create FastAPI app
 app = FastAPI(
@@ -82,6 +82,11 @@ class TaskStatus(BaseModel):
     result: Optional[Dict[str, Any]] = None
     request: Optional[GenerationRequest] = None
     error: Optional[str] = None
+
+
+class SectionInfo(BaseModel):
+    id: str
+    title: str
 
 
 def process_generation_task(
@@ -299,7 +304,26 @@ async def list_languages():
     return AVAILABLE_LANGUAGES
 
 
-@app.get("/sections")
+@app.get("/sections", response_model=List[SectionInfo])
 async def list_sections():
-    """List available sections."""
-    return {idx: section_id for idx, (section_id, _) in enumerate(PROMPT_FUNCTIONS, 1)}
+    """List available sections with their IDs and titles."""
+    try:
+        # Use SECTION_ORDER to maintain order and get titles
+        section_list = []
+        # Create a map of available section IDs from PROMPT_FUNCTIONS for quick lookup
+        available_section_ids = {item[0] for item in PROMPT_FUNCTIONS}
+
+        for section_id, title in SECTION_ORDER:
+             # Only include sections that are actually defined in PROMPT_FUNCTIONS
+             if section_id in available_section_ids:
+                 section_list.append(SectionInfo(id=section_id, title=title))
+             else:
+                 logger.warning(f"Section '{section_id}' from SECTION_ORDER not found in PROMPT_FUNCTIONS. Skipping.")
+
+        # Add this logging line before returning
+        logger.info(f"Returning sections: {section_list} (Type: {type(section_list)})")
+        return section_list
+
+    except Exception as e:
+        logger.exception("Error occurred while fetching sections")
+        return [] # Return empty list on error

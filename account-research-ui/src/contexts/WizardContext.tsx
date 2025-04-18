@@ -5,6 +5,8 @@ import {
   ReactNode,
   FormEvent,
   useCallback,
+  useEffect,
+  useState,
 } from 'react';
 import {
   useForm,
@@ -15,22 +17,16 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { AVAILABLE_LANGUAGES } from '../config'; // Import from frontend config
+
 /* ---------------------------------------------------------------------- */
 /* 1. Zod schema and type helpers                                         */
 /* ---------------------------------------------------------------------- */
 
-// Generate language enum from config
-const languageKeys = Object.keys(AVAILABLE_LANGUAGES) as [string, ...string[]]; // Ensure at least one key
-const languageValues = Object.values(AVAILABLE_LANGUAGES) as [string, ...string[]];
-
 export const wizardFormSchema = z.object({
   targetCompany: z.string().min(2, { message: 'Target company name is required (min 2 chars).' }),
   userCompany: z.string().min(2, { message: 'Your company name is required (min 2 chars).' }),
-  // Use language *values* from backend config for the enum
-  language: z.enum(languageValues, {
-      errorMap: () => ({ message: "Please select a valid language." }),
-  }),
+  // Use string for language instead of enum since values are fetched dynamically
+  language: z.string().min(1, { message: "Please select a valid language." }),
   // Array of section IDs (strings from backend config)
   sections: z.array(z.string()).default([]),
 });
@@ -85,10 +81,11 @@ export function WizardProvider({
   const methods = useForm<FormValues>({
     resolver: zodResolver(wizardFormSchema) as Resolver<FormValues>,
     defaultValues: {
-      language: AVAILABLE_LANGUAGES['2'], // Default to English value
-      sections: [] as string[],
+      language: '', // Default language is now set in OptionsStep useEffect
+      sections: [], // Explicitly set default sections to empty array here
       targetCompany: '',
       userCompany: '',
+      ...defaultValues, // Allow overriding defaults
     },
     mode: 'onChange', // Validate on change for better UX
   });
