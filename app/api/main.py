@@ -96,7 +96,17 @@ def process_generation_task(
     language_key: str,
     section_ids: List[str],
 ):
-    """Process a generation task in the background."""
+    """Process a generation task in the background.
+    
+    Args:
+        task_id: The unique identifier for the task
+        company_name: The name of the target company to research
+        platform_company_name: The name of the user's company (if provided)
+        language_key: The key from AVAILABLE_LANGUAGES to determine output language
+        section_ids: List of section IDs to generate, empty list means all sections
+    
+    The function updates the TASKS dictionary with progress and results.
+    """
     try:
         TASKS[task_id]["status"] = "running"
         TASKS[task_id]["updated_at"] = datetime.now().isoformat()
@@ -108,40 +118,43 @@ def process_generation_task(
 
         # Determine which sections to generate
         if not section_ids:
-            # Generate all sections
-            logger.info(f"No specific sections requested for task {task_id}, generating all sections")
-            selected_prompts = PROMPT_FUNCTIONS
+            # Generate all sections if none are specified
+            logger.info(f"No specific sections requested for task {task_id}, generating all sections defined in PROMPT_FUNCTIONS")
+            selected_prompts = PROMPT_FUNCTIONS # Use the original 2-element tuples
         else:
             selected_prompts = []
             invalid_sections = []
-            
+
             # Extract function IDs from PROMPT_FUNCTIONS for comparison
-            available_section_ids = [section_id for section_id, _, _ in PROMPT_FUNCTIONS]
+            # Each tuple in PROMPT_FUNCTIONS has format (section_id, function_name)
+            available_section_ids = [section_id for section_id, _ in PROMPT_FUNCTIONS]
             
             for section_id in section_ids:
-                # Find the matching prompt function by section_id (first element in tuple)
-                matching_prompts = [prompt for prompt in PROMPT_FUNCTIONS if prompt[0] == section_id]
+                # Find the matching prompt function tuple by section_id (first element)
+                matching_prompts = [prompt_tuple for prompt_tuple in PROMPT_FUNCTIONS if prompt_tuple[0] == section_id]
                 
                 if matching_prompts:
+                    # Append the entire matching tuple (id, func_name)
                     selected_prompts.append(matching_prompts[0])
                 else:
                     invalid_sections.append(section_id)
             
             if invalid_sections:
-                logger.warning(f"Invalid section IDs for task {task_id}: {invalid_sections}")
-            
-            logger.info(f"Selected {len(selected_prompts)} sections for task {task_id}: {[p[0] for p in selected_prompts]}")
+                logger.warning(f"Invalid section IDs requested for task {task_id}: {invalid_sections}. These will be ignored.")
             
             if not selected_prompts:
-                logger.warning(f"No valid sections found for task {task_id}, falling back to all sections")
-                selected_prompts = PROMPT_FUNCTIONS
+                logger.error(f"No valid sections requested for task {task_id}. Cannot proceed.")
+                # Raise an error instead of falling back to all sections when specific (but invalid) sections were requested
+                raise ValueError(f"No valid report sections were selected. Please check the section IDs and try again.")
+
+            logger.info(f"Selected {len(selected_prompts)} sections for task {task_id}: {[p[0] for p in selected_prompts]}")
 
         # Run the generation
         token_stats, base_dir = run_generation(
             company_name,
             platform_company_name,
             language,
-            selected_prompts,
+            selected_prompts,  # This is a list of (section_id, function_name) tuples
         )
 
         # Generate the PDF

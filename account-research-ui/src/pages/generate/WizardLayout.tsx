@@ -1,16 +1,16 @@
 // FILE: account-research-ui/src/pages/generate/WizardLayout.tsx
-import { useState } from 'react';
+import { useState, MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WizardProvider, type FormValues } from '../../contexts/WizardContext';
 import { Stepper } from '../../components/ui/stepper';
 import { Button } from '../../components/ui/button';
 import { TargetCompanyStep } from './steps/TargetCompanyStep';
-import { AboutYouStep } from './steps/AboutYouStep';
-import { OptionsStep } from './steps/OptionsStep';
+import { AboutYouStep } from './steps/AboutYouStep'; // Will become the combined step
 import api from '../../api/client';
 import { useWizardForm } from '../../contexts/WizardContext';
 import { Loader2, Send, ArrowLeft, ArrowRight } from 'lucide-react'; // Import icons
 import { useQuery } from '@tanstack/react-query';
+import { SubmitHandler } from 'react-hook-form'; // Import SubmitHandler
 
 // Define the type for the languages map from the API
 type LanguagesMap = Record<string, string>;
@@ -18,26 +18,25 @@ type LanguagesMap = Record<string, string>;
 // Define steps in the desired order
 const steps = [
   { id: 'target', label: 'Target Company', fields: ['targetCompany'] as const },
-  { id: 'about', label: 'Your Company', fields: ['userCompany'] as const },
-  { id: 'options', label: 'Language & Options', fields: ['language', 'sections'] as const },
+  { id: 'detailsAndOptions', label: 'Your Details & Report Options', fields: ['userCompany', 'language', 'sections'] as const }, // Combined step
 ];
 
 // Internal component with access to form context
 function WizardForm() {
   const navigate = useNavigate();
   const {
-    handleSubmit, // Use handleSubmit directly from react-hook-form
-    formState: { errors, isValid, touchedFields },
+    handleSubmit, // USE THIS FROM RHF
+    formState: { errors, isValid }, // Get form-wide validity
     trigger,
     currentStep,
-    setCurrentStep
+    setCurrentStep,
   } = useWizardForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Fetch languages data using useQuery
   const { data: availableLanguages, isLoading: isLoadingLanguages, error: languagesError } = useQuery<LanguagesMap>({
-    queryKey: ['languages'], // Use the same query key to potentially hit cache
+    queryKey: ['languages'],
     queryFn: async () => {
         const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/languages`);
         if (!response.ok) throw new Error('Failed to fetch languages for submission');
@@ -47,52 +46,59 @@ function WizardForm() {
     enabled: !isSubmitting, // Only fetch if not already submitting
   });
   
-  const handleNext = async () => {
-    console.log("handleNext TRIGGERED"); // Add this log
-    console.log(`WizardForm: handleNext called at step ${currentStep}`); // Add log
-    const fieldsToValidate = steps[currentStep].fields;
-    const isValidStep = await trigger(fieldsToValidate);
-    console.log(`WizardForm: Step ${currentStep} validation result: ${isValidStep}`); // Log validation
+  const handleNext = async (e?: MouseEvent<HTMLButtonElement>) => {
+    e?.preventDefault();
+    console.log(`--- handleNext called (Going from Step ${currentStep} to ${currentStep + 1}) ---`);
+    const fieldsToValidate = steps[currentStep].fields; // Should be ['targetCompany'] when currentStep is 0
+    console.log(`Fields to validate for step ${currentStep}:`, fieldsToValidate);
 
-    if (isValidStep && currentStep < steps.length - 1) {
+    const isValidStep = await trigger(fieldsToValidate);
+    console.log(`Validation result for step ${currentStep}: ${isValidStep}`);
+
+    const shouldAdvance = currentStep < steps.length - 1; // Will be true only if currentStep is 0
+    console.log(`Should advance? (${currentStep} < ${steps.length - 1}): ${shouldAdvance}`);
+
+    if (isValidStep && shouldAdvance) {
+      console.log(`Validation passed and not last step. Calling setCurrentStep.`);
       setCurrentStep(prev => {
         const nextStep = prev + 1;
-        console.log(`WizardForm: Validation successful, advancing to step ${nextStep}`); // Log advancement
-        return nextStep;
+        console.log(`Inside setCurrentStep: Advancing from ${prev} to ${nextStep}`);
+        return nextStep; // Advances to step index 1
       });
       if (apiError) setApiError(null);
     } else if (!isValidStep) {
-      console.log(`WizardForm: Validation failed for step ${currentStep}`, errors); // Log validation failure
+      console.log(`Validation FAILED for step ${currentStep}. Errors:`, JSON.stringify(errors));
     } else {
-      console.log(`WizardForm: Already at last step or condition not met (currentStep: ${currentStep})`); // Log edge case
+      console.log(`Condition not met to advance (Already last step or validation failed).`);
     }
+    console.log(`--- handleNext finished ---`);
   };
 
   const handleBack = () => {
-    console.log("handleBack TRIGGERED"); // Add this log
+    console.log("--- handleBack called ---");
     if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-      // Clear any previous API errors when moving back
+      setCurrentStep(prev => prev - 1); // Moves back to step index 0
       if (apiError) setApiError(null);
     }
   };
 
-  // This is the actual function passed to RHF's handleSubmit
-  const processFormSubmit = async (data: FormValues) => {
-    console.log("processFormSubmit TRIGGERED"); // Add this log
+  // This function is PASSED TO RHF's handleSubmit. It receives validated form data.
+  const processFormSubmit: SubmitHandler<FormValues> = async (data) => {
+    console.log(`--- processFormSubmit called (FINAL SUBMISSION from Step ${currentStep}) ---`);
+    console.log("Data received by submit handler:", data);
     setApiError(null);
     setIsSubmitting(true);
-    console.log('Submitting data:', data);
 
     // Wait if languages are still loading for the lookup
     if (isLoadingLanguages) {
-        console.log('Waiting for languages map to load...');
+        console.log('processFormSubmit: Waiting for languages map...');
         setApiError("Language configuration still loading, please wait...");
         setIsSubmitting(false);
-        return; // Or potentially add a short delay/retry?
+        return;
     }
 
     if (languagesError || !availableLanguages) {
+      console.error('processFormSubmit: Language fetch error or data missing.');
       setApiError(`Failed to load language configuration: ${languagesError?.message || 'Unknown error'}`);
       setIsSubmitting(false);
       return;
@@ -104,6 +110,7 @@ function WizardForm() {
     )?.[0];
 
     if (!languageKey) {
+        console.error('processFormSubmit: Could not find language key for:', data.language);
         setApiError("Selected language is invalid or not configured properly.");
         setIsSubmitting(false);
         return;
@@ -114,50 +121,42 @@ function WizardForm() {
           company_name: data.targetCompany,
           platform_company_name: data.userCompany,
           language_key: languageKey,
-          sections: data.sections || []
+          sections: data.sections || [] // Ensure sections is always an array
       };
-      console.log('API Payload:', payload);
+      console.log('processFormSubmit: Sending API Payload:', payload);
       const { task_id } = await api.createTask(payload);
-      console.log('Task created with ID:', task_id);
-      
-      // --- Add log BEFORE navigation ---
-      console.log(`WizardForm: Attempting to navigate to /task/${task_id}`);
-      
+      console.log('processFormSubmit: Task created with ID:', task_id);
+      console.log(`processFormSubmit: Navigating to /task/${task_id}`);
       navigate(`/task/${task_id}`);
-      
-      // --- Add log AFTER navigation call (might not execute if navigation unmounts component) ---
-      console.log(`WizardForm: Navigation to /task/${task_id} called.`);
-      
+
     } catch (error: any) {
-      console.error('Error creating task:', error);
+      console.error('processFormSubmit: Error creating task:', error);
       setApiError(
         error.response?.data?.detail ||
         error.message ||
         'Failed to create task. Please try again.'
       );
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Reset submitting state on error
     }
+    console.log(`--- processFormSubmit finished ---`);
   };
 
   // Render step components based on the current step index
   const stepComponents = [
     <TargetCompanyStep key="target" />,
-    <AboutYouStep key="about" />,
-    <OptionsStep key="options" />,
+    <AboutYouStep key="about" />, // This component will be updated next
   ];
 
   // Determine if the current step has validation errors
   const hasCurrentStepErrors = steps[currentStep].fields.some(field => !!errors[field]);
 
-  console.log(`WizardForm (Child): Rendering with currentStep from context = ${currentStep}`); // Add this log
-  
-  // Log before rendering step component
-  console.log(`WizardForm: About to render step component index ${currentStep}`);
+  console.log(`WizardForm Rendering: currentStep=${currentStep}, isValid=${isValid}, hasCurrentStepErrors=${hasCurrentStepErrors}, isSubmitting=${isSubmitting}`);
   
   return (
     // Use RHF's handleSubmit to wrap the actual submission logic
     <form onSubmit={handleSubmit(processFormSubmit)} className="space-y-8">
-      <div className="min-h-[250px] p-1"> {/* Added padding */}
+      <div className="min-h-[250px] p-1"> {/* Increased min-height for combined step */}
+        {/* Render component based on currentStep index */}
         {stepComponents[currentStep]}
       </div>
 
@@ -170,33 +169,33 @@ function WizardForm() {
       <div className="flex justify-between items-center pt-6 border-t border-border">
         <Button
           variant="outline"
-          onClick={handleBack}
-          disabled={currentStep === 0 || isSubmitting}
-          type="button"
+          onClick={handleBack} // Calls local handleBack
+          disabled={currentStep === 0 || isSubmitting} // Only disable Back on Step 0
+          type="button" // MUST be type="button" to not submit form
           className="text-white border-gray-dk hover:bg-navy hover:border-lime hover:text-lime flex items-center gap-1"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
 
-        {currentStep < steps.length - 1 ? (
+        {/* Show NEXT button only on Step 0 */}
+        {currentStep === 0 ? (
           <Button
-            variant="primary" 
-            type="button" // CRITICAL: Must be type="button"
+            variant="primary"
+            type="button"
             onClick={handleNext}
-            // Disable if current step fields have errors or is submitting
-            disabled={hasCurrentStepErrors || isSubmitting}
+            disabled={hasCurrentStepErrors || isSubmitting} // Disable based on Step 0 errors
             className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
           >
             Next
             <ArrowRight className="w-4 h-4" />
           </Button>
         ) : (
+          // Show SUBMIT button on Step 1 (the new final step)
           <Button
             variant="primary"
-            type="submit" // CRITICAL: Must be type="submit"
-            // Disable if form is invalid or submitting
-            disabled={!isValid || isSubmitting}
+            type="submit" // MUST be type="submit" to trigger the form's onSubmit
+            disabled={!isValid || isSubmitting} // Disable based on overall form validity
             className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
           >
             {isSubmitting ? (
@@ -218,7 +217,7 @@ function WizardForm() {
 // Main layout component
 export default function WizardLayout() {
   const [currentStep, setCurrentStep] = useState(0);
-  console.log(`WizardLayout (Parent): Rendering with currentStep = ${currentStep}`); // Add this log
+  // console.log(`WizardLayout (Parent): Rendering with currentStep = ${currentStep}`);
   
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-primary p-4 md:p-8 flex items-center justify-center">

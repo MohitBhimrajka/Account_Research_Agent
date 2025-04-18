@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from google import genai
 from google.genai import types
+from google.api_core import exceptions as api_exceptions
 import tiktoken
 import json
 from datetime import datetime
@@ -75,70 +76,107 @@ def format_time(seconds: float) -> str:
 
 
 def generate_content(client: genai.Client, prompt: str, output_path: Path) -> Dict:
-    """Generate content for a single prompt and save to file. Returns token counts and timing."""
+    """Generate content for a single prompt and save to file. Includes retries."""
     start_time = time.time()
-    try:
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=prompt)],
-            ),
-        ]
-        tools = [types.Tool(google_search=types.GoogleSearch())]
-        generate_content_config = types.GenerateContentConfig(
-            temperature=LLM_TEMPERATURE,
-            tools=tools,
-            response_mime_type="text/plain",
-        )
+    max_retries = 3
+    base_delay = 2  # seconds
 
-        # Create output directory if it doesn't exist
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Create output directory if it doesn't exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Count input tokens
-        input_tokens = count_tokens(prompt)
+    input_tokens = 0  # Initialize outside loop
+    output_tokens = 0  # Initialize outside loop
 
-        # Collect output text
-        full_output = ""
-
-        # Open file for writing
-        with open(output_path, "w", encoding="utf-8") as f:
-            response = client.models.generate_content_stream(
-                model=LLM_MODEL,
-                contents=contents,
-                config=generate_content_config,
+    for attempt in range(max_retries):
+        try:
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)],
+                ),
+            ]
+            tools = [types.Tool(google_search=types.GoogleSearch())]
+            generate_content_config = types.GenerateContentConfig(
+                temperature=LLM_TEMPERATURE,
+                tools=tools,
+                response_mime_type="text/plain",
             )
 
-            for chunk in response:
-                if shutdown_requested:
-                    raise InterruptedError("Generation interrupted by user")
+            # Count input tokens (only need to do this once ideally, but safe here)
+            input_tokens = count_tokens(prompt)
 
-                if chunk.text:
-                    f.write(chunk.text)
-                    f.flush()
-                    full_output += chunk.text
+            # Collect output text
+            full_output = ""
 
-        # Count output tokens
-        output_tokens = count_tokens(full_output)
+            # Open file for writing
+            with open(output_path, "w", encoding="utf-8") as f:
+                # --- API Call ---
+                response = client.models.generate_content_stream(
+                    model=LLM_MODEL,  # Use the configured model
+                    contents=contents,
+                    config=generate_content_config,
+                )
 
-        execution_time = time.time() - start_time
-        return {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": input_tokens + output_tokens,
-            "execution_time": execution_time,
-            "status": "success",
-        }
-    except Exception as e:
-        execution_time = time.time() - start_time
-        logging.error(f"Error generating content for {output_path.name}: {str(e)}")
-        return {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "total_tokens": 0,
-            "execution_time": execution_time,
-            "status": "error",
-            "error": str(e),
-        }
+                for chunk in response:
+                    if shutdown_requested:
+                        raise InterruptedError("Generation interrupted by user")
+
+                    if chunk.text:
+                        f.write(chunk.text)
+                        f.flush()  # Ensure content is written progressively
+                        full_output += chunk.text
+            # --- End API Call ---
+
+            # Count output tokens
+            output_tokens = count_tokens(full_output)
+            execution_time = time.time() - start_time
+
+            # Success! Break the retry loop
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+                "execution_time": execution_time,
+                "status": "success",
+            }
+
+        except (api_exceptions.InternalServerError, api_exceptions.ServiceUnavailable, api_exceptions.DeadlineExceeded) as e:
+            logging.warning(f"Attempt {attempt + 1}/{max_retries} failed for {output_path.name}: {type(e).__name__}. Retrying...")
+            if attempt < max_retries - 1:
+                # Exponential backoff
+                delay = base_delay * (2 ** attempt)
+                logging.info(f"Waiting {delay} seconds before retry...")
+                time.sleep(delay)
+                continue  # Retry the loop
+            else:
+                logging.error(f"All {max_retries} retry attempts failed for {output_path.name}.")
+                # Propagate the error to be caught by the outer handler
+                raise e
+        
+        # Catch other potential exceptions during generation/writing
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logging.error(f"Non-retryable error generating content for {output_path.name}: {str(e)}", exc_info=True)  # Log full traceback
+            return {
+                "input_tokens": input_tokens,  # May have been calculated
+                "output_tokens": 0,
+                "total_tokens": input_tokens,
+                "execution_time": execution_time,
+                "status": "error",
+                "error": f"{type(e).__name__}: {str(e)}",
+            }
+
+    # This part should ideally not be reached if success returns early or error is raised
+    # But as a fallback:
+    execution_time = time.time() - start_time
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": 0,
+        "total_tokens": input_tokens,
+        "execution_time": execution_time,
+        "status": "error",
+        "error": f"Failed after {max_retries} retries.",
+    }
 
 
 def get_user_input() -> tuple[str, str, list[str], list[tuple[str, str]]]:

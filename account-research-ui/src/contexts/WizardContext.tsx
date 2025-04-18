@@ -3,13 +3,10 @@ import {
   createContext,
   useContext,
   ReactNode,
-  FormEvent,
-  useCallback,
 } from 'react';
 import {
   useForm,
   UseFormReturn,
-  SubmitHandler,
   Resolver,
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -42,16 +39,6 @@ export type FormValues = {
 type WizardContextType = UseFormReturn<FormValues> & {
   currentStep: number;
   setCurrentStep: (step: number | ((prevStep: number) => number)) => void; // Allow functional updates
-
-  /**
-   * Utility that wraps `handleSubmit` and swallows the native
-   * event so you can write:
-   *
-   *   <form onSubmit={onSubmit(async (data) => { … })}>
-   */
-  onSubmit: (
-    handler: SubmitHandler<FormValues>
-  ) => (e?: FormEvent<HTMLFormElement>) => Promise<void>; // Make event optional
 };
 
 const WizardContext = createContext<WizardContextType | null>(null);
@@ -87,33 +74,12 @@ export function WizardProvider({
     mode: 'onChange', // Validate on change for better UX
   });
 
-  /** helper that returns a submit handler you can drop into `<form onSubmit={...}>` */
-  const onSubmit: WizardContextType['onSubmit'] = useCallback(
-    (handler) => async (e) => {
-      if (e) {
-          e.preventDefault(); // Prevent default form submission
-          e.stopPropagation(); // Stop event bubbling
-      }
-      // Trigger validation before submitting
-      const isValid = await methods.trigger();
-      if (isValid) {
-          // Directly call the handler with form data
-          await handler(methods.getValues());
-      } else {
-          console.log("Form validation failed", methods.formState.errors);
-      }
-    },
-    [methods]
-  );
-
-
   return (
     <WizardContext.Provider
       value={{
         ...methods,
         currentStep,
         setCurrentStep,
-        onSubmit,
       }}
     >
       {children}
