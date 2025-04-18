@@ -1,87 +1,160 @@
+// FILE: account-research-ui/src/pages/generate/WizardLayout.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { WizardProvider, type FormValues } from './WizardContext';
+import { WizardProvider, type FormValues } from '../../contexts/WizardContext';
 import { Stepper } from '../../components/ui/stepper';
 import { Button } from '../../components/ui/button';
 import { TargetCompanyStep } from './steps/TargetCompanyStep';
 import { AboutYouStep } from './steps/AboutYouStep';
 import { OptionsStep } from './steps/OptionsStep';
 import api from '../../api/client';
-import { useWizardForm } from './WizardContext';
+import { useWizardForm } from '../../contexts/WizardContext';
+import { Loader2, Send, ArrowLeft, ArrowRight } from 'lucide-react'; // Import icons
+import { AVAILABLE_LANGUAGES } from '../../config'; // Import backend config
 
+// Define steps in the desired order
 const steps = [
-  { id: 'target', label: 'Target company' },
-  { id: 'about', label: 'About you' },
-  { id: 'options', label: 'Language & options' },
+  { id: 'target', label: 'Target Company', fields: ['targetCompany'] as const },
+  { id: 'about', label: 'Your Company', fields: ['userCompany'] as const },
+  { id: 'options', label: 'Language & Options', fields: ['language', 'sections'] as const },
 ];
 
 // Internal component with access to form context
 function WizardForm() {
   const navigate = useNavigate();
-  const { onSubmit, formState, currentStep, setCurrentStep } = useWizardForm();
+  const {
+    handleSubmit, // Use handleSubmit directly from react-hook-form
+    formState: { errors, isValid, touchedFields },
+    getValues,
+    trigger,
+    currentStep,
+    setCurrentStep
+  } = useWizardForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const handleNext = async () => {
+    // Trigger validation for the current step's fields
+    const fieldsToValidate = steps[currentStep].fields;
+    const isValidStep = await trigger(fieldsToValidate);
+
+    if (isValidStep && currentStep < steps.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    } else {
+      // Optionally show validation errors if needed, though react-hook-form usually handles this
+      console.log("Validation failed for step", currentStep, errors);
     }
   };
-  
+
   const handleBack = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(prev => prev - 1);
     }
   };
-  
-  const handleSubmit = async (data: FormValues) => {
+
+  // This is the actual function passed to RHF's handleSubmit
+  const processFormSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
+    setApiError(null);
+    console.log('Submitting data:', data);
+
+    // Find the language key corresponding to the selected language value
+    const languageKey = Object.keys(AVAILABLE_LANGUAGES).find(
+      key => AVAILABLE_LANGUAGES[key as keyof typeof AVAILABLE_LANGUAGES] === data.language
+    );
+
+    if (!languageKey) {
+        setApiError("Selected language is invalid.");
+        setIsSubmitting(false);
+        return;
+    }
+
     try {
-      const { task_id } = await api.createTask(data);
+      const payload = {
+          company_name: data.targetCompany,
+          platform_company_name: data.userCompany, // Ensure backend expects this field
+          language_key: languageKey, // Send the key ('1', '2', etc.)
+          sections: data.sections || [] // Ensure sections is always an array
+      };
+      console.log('API Payload:', payload);
+      const { task_id } = await api.createTask(payload);
+      console.log('Task created with ID:', task_id);
       navigate(`/task/${task_id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error);
+      setApiError(error.response?.data?.detail || error.message || 'Failed to create task. Please try again.');
       setIsSubmitting(false);
     }
   };
-  
+
+  // Render step components based on the current step index
   const stepComponents = [
     <TargetCompanyStep key="target" />,
     <AboutYouStep key="about" />,
     <OptionsStep key="options" />,
   ];
-  
+
+  // Determine if the current step is valid
+  const isCurrentStepValid = () => {
+      const currentFields = steps[currentStep].fields;
+      // Check if all fields in the current step have been touched and have no errors
+      return currentFields.every(field => touchedFields[field] && !errors[field]);
+  };
+
   return (
-    <form onSubmit={onSubmit(handleSubmit)} className="space-y-8">
-      <div className="min-h-[300px]">
+    // Use RHF's handleSubmit to wrap the actual submission logic
+    <form onSubmit={handleSubmit(processFormSubmit)} className="space-y-8">
+      <div className="min-h-[250px] p-1"> {/* Added padding */}
         {stepComponents[currentStep]}
       </div>
-      
-      <div className="flex justify-between pt-4">
+
+      {apiError && (
+        <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-3 rounded-md text-sm">
+          {apiError}
+        </div>
+      )}
+
+      <div className="flex justify-between items-center pt-6 border-t border-border">
         <Button
           variant="outline"
           onClick={handleBack}
-          disabled={currentStep === 0}
+          disabled={currentStep === 0 || isSubmitting}
           type="button"
+          className="text-white border-gray-dk hover:bg-navy hover:border-lime hover:text-lime flex items-center gap-1"
         >
+          <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
-        
+
         {currentStep < steps.length - 1 ? (
           <Button
-            variant="primary"
+            variant="primary" // Use accent color for Next
             type="button"
             onClick={handleNext}
-            disabled={!formState.isValid}
+            // Disable if current step fields have errors
+            disabled={steps[currentStep].fields.some(field => errors[field])}
+            className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
           >
             Next
+            <ArrowRight className="w-4 h-4" />
           </Button>
         ) : (
           <Button
-            variant="primary"
+            variant="primary" // Use accent color for Submit
             type="submit"
-            disabled={!formState.isValid || isSubmitting}
+            // Disable if form is invalid or submitting
+            disabled={!isValid || isSubmitting}
+            className="bg-lime text-primary hover:bg-lime/90 flex items-center gap-1"
           >
-            {isSubmitting ? 'Submitting...' : 'Submit'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...
+              </>
+            ) : (
+              <>
+                Generate Report <Send className="w-4 h-4 ml-2" />
+              </>
+            )}
           </Button>
         )}
       </div>
@@ -92,22 +165,22 @@ function WizardForm() {
 // Main layout component
 export default function WizardLayout() {
   const [currentStep, setCurrentStep] = useState(0);
-  
+
   return (
-    <div className="min-h-screen bg-black p-4 md:p-8">
-      <div className="max-w-3xl mx-auto bg-navy rounded-2xl shadow-lg p-6 md:p-8">
-        <h1 className="text-2xl font-bold text-white mb-6">Create Account Research</h1>
-        
-        <Stepper 
-          steps={steps} 
-          activeStep={currentStep} 
-          className="mb-8"
+    <div className="min-h-[calc(100vh-4rem)] bg-primary p-4 md:p-8 flex items-center justify-center">
+      <div className="w-full max-w-3xl bg-navy rounded-2xl shadow-xl p-6 md:p-10"> {/* Increased padding */}
+        <h1 className="text-3xl font-bold text-white mb-8 text-center">Create New Account Research</h1>
+
+        <Stepper
+          steps={steps}
+          activeStep={currentStep}
+          className="mb-10 px-2" // Added padding
         />
-        
+
         <WizardProvider currentStep={currentStep} setCurrentStep={setCurrentStep}>
           <WizardForm />
         </WizardProvider>
       </div>
     </div>
   );
-} 
+}

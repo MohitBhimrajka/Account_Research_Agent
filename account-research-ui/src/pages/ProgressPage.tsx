@@ -1,15 +1,22 @@
+// FILE: account-research-ui/src/pages/ProgressPage.tsx
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Clock, 
-  Loader2 
+import {
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Loader2,
+  User,
+  Mail,
+  Briefcase,
+  Lightbulb,
+  Download,
+  FileText,
 } from 'lucide-react';
 
 import api, { Task } from '../api/client';
@@ -22,199 +29,334 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogOverlay, // Import Overlay
+  DialogPortal, // Import Portal
 } from '../components/ui/dialog';
+import { cn } from '../lib/utils'; // Assuming you have this utility
 
 // Define the user info schema
 const userInfoSchema = z.object({
-  name: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email address'),
-  designation: z.string().min(2, 'Designation is required'),
+  name: z.string().min(2, { message: 'Name is required (min 2 chars).' }),
+  email: z.string().email({ message: 'Please enter a valid email address.' }),
+  designation: z.string().min(2, { message: 'Job Title/Designation is required (min 2 chars).' }),
 });
 
 type UserInfo = z.infer<typeof userInfoSchema>;
 
 // Task section statuses mapped to UI components
 const StatusIcon = ({ status }: { status: string }) => {
-  switch (status) {
-    case 'completed':
-      return <CheckCircle className="w-5 h-5 text-lime" />;
-    case 'error':
-      return <XCircle className="w-5 h-5 text-orange" />;
-    case 'pending':
-      return <Clock className="w-5 h-5 text-blue" />;
-    case 'processing':
-      return <Loader2 className="w-5 h-5 text-blue animate-spin" />;
-    default:
-      return <AlertCircle className="w-5 h-5 text-gray-lt" />;
-  }
+    const baseClasses = "w-5 h-5 flex-shrink-0";
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className={cn(baseClasses, "text-lime")} />;
+      case 'failed': // Renamed from 'error' to match backend/task status
+        return <XCircle className={cn(baseClasses, "text-orange")} />;
+      case 'pending':
+        return <Clock className={cn(baseClasses, "text-gray-lt")} />; // Use gray for pending
+      case 'processing':
+        return <Loader2 className={cn(baseClasses, "text-blue animate-spin")} />;
+      default:
+        return <AlertCircle className={cn(baseClasses, "text-gray-lt")} />;
+    }
+  };
+
+// Mock/Example log data structure (replace with real API data if available)
+// This should ideally come from the backend status endpoint if it provides granular progress.
+const getTaskLogs = (taskStatus: string | undefined, progress: number | undefined) => {
+    const baseLogs = [
+      { id: 'init', label: 'Initializing Task', status: 'pending' },
+      { id: 'disambiguation', label: 'Confirming Target Company', status: 'pending' },
+      { id: 'fetch_data', label: 'Gathering Source Information', status: 'pending' },
+      { id: 'analyze_data', label: 'Analyzing Data & Generating Sections', status: 'pending' },
+      { id: 'compile_report', label: 'Compiling Report Sections', status: 'pending' },
+      { id: 'generate_pdf', label: 'Generating Final PDF', status: 'pending' },
+    ];
+
+    if (!taskStatus) return baseLogs;
+
+    const currentProgress = progress ?? 0;
+
+    if (taskStatus === 'failed') {
+      return baseLogs.map(log => ({ ...log, status: log.id === 'init' ? 'completed' : 'failed' }));
+    }
+
+    const thresholds = [0, 5, 15, 75, 90, 95, 100]; // Example progress thresholds for each step
+    let currentStepIndex = -1;
+
+    for (let i = 0; i < thresholds.length - 1; i++) {
+        if (currentProgress >= thresholds[i]) {
+            currentStepIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    return baseLogs.map((log, index) => {
+        let status: string;
+        if (index < currentStepIndex) {
+            status = 'completed';
+        } else if (index === currentStepIndex) {
+            status = taskStatus === 'completed' ? 'completed' : 'processing';
+        } else {
+            status = 'pending';
+        }
+
+        // If overall task is completed, mark all as completed
+        if(taskStatus === 'completed') {
+            status = 'completed';
+        }
+
+        return { ...log, status };
+    });
 };
+
 
 export default function ProgressPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(true);
+  const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false); // Start closed, check storage first
   const [hasUserInfo, setHasUserInfo] = useState(false);
 
-  // Check local storage for user info
+  // Check local storage for user info on component mount
   useEffect(() => {
     const storedUserInfo = localStorage.getItem('userInfo');
     if (storedUserInfo) {
-      setHasUserInfo(true);
-      setUserInfoDialogOpen(false);
+      try {
+        // Basic validation if needed
+        JSON.parse(storedUserInfo);
+        setHasUserInfo(true);
+      } catch {
+        localStorage.removeItem('userInfo'); // Clear invalid data
+        setUserInfoDialogOpen(true); // Open dialog if stored data is bad
+      }
+    } else {
+      setUserInfoDialogOpen(true); // Open dialog if no info stored
     }
   }, []);
 
-  // Form handling
+
+  // Form handling for user info
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting: isFormSubmitting }, // Renamed to avoid conflict
+    reset,
   } = useForm<UserInfo>({
     resolver: zodResolver(userInfoSchema),
   });
 
-  // Handle form submission
-  const onSubmit = async (data: UserInfo) => {
-    localStorage.setItem('userInfo', JSON.stringify(data));
-    setHasUserInfo(true);
-    setUserInfoDialogOpen(false);
+  // Handle user info form submission
+  const onUserInfoSubmit = async (data: UserInfo) => {
+    try {
+      localStorage.setItem('userInfo', JSON.stringify(data));
+      setHasUserInfo(true);
+      setUserInfoDialogOpen(false);
+      reset(); // Clear form after successful submission
+    } catch (error) {
+        console.error("Failed to save user info:", error);
+        // Optionally show an error message to the user
+    }
   };
 
-  // Task status polling
-  const { data: task, error } = useQuery<Task>({
-    queryKey: ['task', id],
-    queryFn: () => api.getTaskStatus(id!),
-    enabled: !!id && hasUserInfo,
-    refetchInterval: 3000, // Poll every 3 seconds
-    refetchOnWindowFocus: false,
+  // Task status polling using react-query
+  const { data: task, error: taskError, isLoading: isTaskLoading } = useQuery<Task>({
+    queryKey: ['taskStatus', id],
+    queryFn: () => {
+        if (!id) throw new Error("Task ID is missing");
+        return api.getTaskStatus(id);
+    },
+    enabled: !!id && hasUserInfo, // Only poll if ID exists and user info is provided
+    refetchInterval: (query) => {
+      // Stop polling if task is completed or failed
+      const taskData = query.state.data;
+      if (taskData?.status === 'completed' || taskData?.status === 'failed') {
+        return false;
+      }
+      return 5000; // Poll every 5 seconds otherwise
+    },
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    retry: 2, // Retry failed requests twice
   });
 
-  // Handle task completion or failure
+  // Navigate to result page on completion
   useEffect(() => {
-    if (task) {
-      if (task.status === 'completed') {
+    if (task?.status === 'completed') {
+      // Optional delay before navigating
+      const timer = setTimeout(() => {
         navigate(`/task/${id}/result`);
-      }
+      }, 1000); // 1 second delay
+      return () => clearTimeout(timer);
     }
-  }, [task, id, navigate]);
+  }, [task?.status, id, navigate]);
 
-  // Mock log data structure (in real app, this would come from the API)
-  const taskLogs = [
-    { id: 'init', label: 'Initializing task', status: 'completed' },
-    { id: 'data', label: 'Gathering company data', status: task?.status === 'pending' ? 'pending' : 'processing' },
-    { id: 'analysis', label: 'Running analysis', status: task?.progress && task.progress > 30 ? 'processing' : 'pending' },
-    { id: 'report', label: 'Generating report', status: task?.progress && task.progress > 70 ? 'processing' : 'pending' },
-  ];
+
+  // Derive logs based on task status and progress
+  const taskLogs = getTaskLogs(task?.status, task?.progress);
+
+  const showProgressUI = hasUserInfo && id;
 
   return (
-    <div className="min-h-screen bg-black p-6">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-6">Task Progress</h1>
+    <div className="min-h-[calc(100vh-4rem)] bg-primary text-foreground p-4 md:p-8 flex items-center justify-center">
+      <div className="w-full max-w-3xl">
 
         {/* User Info Modal */}
-        <Dialog open={userInfoDialogOpen} onOpenChange={setUserInfoDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Enter your information</DialogTitle>
-              <DialogDescription>
-                We need a few details to track your request. This will help us personalize your results.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-              <div className="grid w-full items-center gap-1.5">
-                <label htmlFor="name" className="text-sm font-medium text-white">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  className="w-full p-2 rounded-md border-gray-dk bg-navy text-white focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
-                  {...register("name")}
-                />
-                {errors.name && (
-                  <p className="text-orange text-sm">{errors.name.message}</p>
-                )}
-              </div>
+        {/* Use DialogPortal and DialogOverlay for proper modal behavior */}
+        <Dialog open={userInfoDialogOpen} onOpenChange={(open) => { if (!open && !hasUserInfo) setUserInfoDialogOpen(true); }}>
+            <DialogPortal>
+                 <DialogOverlay />
+                <DialogContent className="sm:max-w-[480px] bg-navy border-gray-dk rounded-lg"> {/* Branded colors */}
+                <DialogHeader>
+                    <DialogTitle className="text-xl text-white flex items-center gap-2">
+                        <User className="text-lime" /> Tell Us About Yourself
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-lt">
+                    Provide your details so we can keep track of your request and potentially notify you upon completion.
+                    </DialogDescription>
+                </DialogHeader>
 
-              <div className="grid w-full items-center gap-1.5">
-                <label htmlFor="email" className="text-sm font-medium text-white">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  className="w-full p-2 rounded-md border-gray-dk bg-navy text-white focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
-                  {...register("email")}
-                />
-                {errors.email && (
-                  <p className="text-orange text-sm">{errors.email.message}</p>
-                )}
-              </div>
+                <form onSubmit={handleSubmit(onUserInfoSubmit)} className="space-y-5 py-4">
+                    {/* Name Input */}
+                    <div className="grid w-full items-center gap-1.5">
+                        <label htmlFor="name" className="text-sm font-medium text-gray-lt flex items-center gap-1">
+                            <User className="w-4 h-4"/> Name
+                        </label>
+                        <input
+                        id="name"
+                        className="w-full p-2 rounded-md border border-input bg-primary text-white placeholder-gray-dk focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
+                        {...register("name")}
+                        aria-invalid={errors.name ? "true" : "false"}
+                        aria-describedby="nameError"
+                        />
+                        {errors.name && <p id="nameError" className="text-orange text-xs mt-1">{errors.name.message}</p>}
+                    </div>
 
-              <div className="grid w-full items-center gap-1.5">
-                <label htmlFor="designation" className="text-sm font-medium text-white">
-                  Job Title / Designation
-                </label>
-                <input
-                  id="designation"
-                  className="w-full p-2 rounded-md border-gray-dk bg-navy text-white focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
-                  {...register("designation")}
-                />
-                {errors.designation && (
-                  <p className="text-orange text-sm">{errors.designation.message}</p>
-                )}
-              </div>
+                    {/* Email Input */}
+                    <div className="grid w-full items-center gap-1.5">
+                        <label htmlFor="email" className="text-sm font-medium text-gray-lt flex items-center gap-1">
+                            <Mail className="w-4 h-4"/> Email Address
+                        </label>
+                        <input
+                        id="email"
+                        type="email"
+                        className="w-full p-2 rounded-md border border-input bg-primary text-white placeholder-gray-dk focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
+                        {...register("email")}
+                        aria-invalid={errors.email ? "true" : "false"}
+                        aria-describedby="emailError"
+                        />
+                        {errors.email && <p id="emailError" className="text-orange text-xs mt-1">{errors.email.message}</p>}
+                    </div>
 
-              <DialogFooter>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Saving..." : "Continue"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
+                    {/* Designation Input */}
+                    <div className="grid w-full items-center gap-1.5">
+                        <label htmlFor="designation" className="text-sm font-medium text-gray-lt flex items-center gap-1">
+                            <Briefcase className="w-4 h-4"/> Job Title / Designation
+                        </label>
+                        <input
+                        id="designation"
+                        className="w-full p-2 rounded-md border border-input bg-primary text-white placeholder-gray-dk focus:border-lime focus:outline-none focus:ring-1 focus:ring-lime"
+                        {...register("designation")}
+                        aria-invalid={errors.designation ? "true" : "false"}
+                        aria-describedby="designationError"
+                        />
+                        {errors.designation && <p id="designationError" className="text-orange text-xs mt-1">{errors.designation.message}</p>}
+                    </div>
+
+                    <DialogFooter className="mt-6">
+                        <Button type="submit" disabled={isFormSubmitting} className="bg-lime text-primary hover:bg-lime/90 w-full sm:w-auto">
+                        {isFormSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Continue to Progress"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+                </DialogContent>
+            </DialogPortal>
         </Dialog>
 
-        {/* Task progress content */}
-        <div className="bg-navy rounded-xl p-6 shadow-lg">
-          {error || task?.status === 'failed' ? (
-            <div className="bg-navy border border-orange/30 rounded-lg p-4 text-white">
-              <div className="flex items-center gap-2 text-orange mb-2">
-                <AlertCircle className="w-5 h-5" />
-                <h3 className="font-semibold">Task Failed</h3>
-              </div>
-              <p className="text-gray-lt">{task?.error || 'An error occurred while processing your request. Please try again.'}</p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => navigate('/generate')}
-              >
-                Start New Request
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="mb-6">
-                <div className="flex justify-between text-white mb-2">
-                  <span>Processing your request</span>
-                  <span>{task?.progress ? `${task.progress}%` : 'Initializing...'}</span>
-                </div>
-                <Progress value={task?.progress} />
-              </div>
+        {/* Main Progress Display Area */}
+        {showProgressUI && (
+            <div className="bg-navy rounded-xl p-6 md:p-8 shadow-lg animate-fadeIn">
+                <h1 className="text-2xl font-bold text-white mb-6 text-center">Generating Your Report</h1>
 
-              <div className="space-y-4 mt-8">
-                <h3 className="text-white font-medium mb-4">Progress Log</h3>
-                
-                {taskLogs.map((log) => (
-                  <div key={log.id} className="flex items-center gap-3 text-white border-b border-gray-dk pb-3">
-                    <StatusIcon status={log.status} />
-                    <span>{log.label}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+                {isTaskLoading && !task && ( // Initial loading state
+                     <div className="text-center py-10">
+                        <Loader2 className="w-8 h-8 text-lime animate-spin mx-auto mb-4" />
+                        <p className="text-white">Loading task status...</p>
+                    </div>
+                )}
+
+                {taskError && ( // Error fetching task status
+                     <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-4 rounded-lg text-center">
+                        <AlertCircle className="w-6 h-6 mx-auto mb-2"/>
+                        <h3 className="font-semibold mb-1">Error Loading Task</h3>
+                        <p className="text-sm mb-4">Could not retrieve task status. Please check the task ID or try again later.</p>
+                         <Button variant="outline" onClick={() => window.location.reload()} className="text-white border-gray-dk hover:bg-gray-dk">
+                             Refresh Page
+                         </Button>
+                    </div>
+                )}
+
+                {task?.status === 'failed' && ( // Task processing failed
+                     <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-4 rounded-lg text-center">
+                         <XCircle className="w-6 h-6 mx-auto mb-2"/>
+                        <h3 className="font-semibold mb-1">Task Failed</h3>
+                        <p className="text-sm mb-4">{task.error || 'An unexpected error occurred during report generation.'}</p>
+                        <Button variant="primary" className="bg-lime text-primary hover:bg-lime/90" onClick={() => navigate('/generate')}>
+                            Start New Report
+                        </Button>
+                    </div>
+                )}
+
+                {task && task.status !== 'failed' && task.status !== 'completed' && ( // Task is pending or processing
+                    <>
+                    {/* Progress Bar */}
+                    <div className="mb-6">
+                        <div className="flex justify-between text-sm text-gray-lt mb-1">
+                        <span>Overall Progress</span>
+                        {/* Show percentage only when processing */}
+                        <span>{task.status === 'processing' ? `${Math.round(task.progress ?? 0)}%` : 'Waiting...'}</span>
+                        </div>
+                        <Progress value={task.status === 'processing' ? task.progress : 0} className="h-3 bg-gray-dk" />
+                    </div>
+
+                    {/* Progress Logs */}
+                    <div className="space-y-3 border-t border-gray-dk pt-4">
+                        <h3 className="text-lg font-medium text-white mb-2">Generation Steps:</h3>
+                        {taskLogs.map((log) => (
+                        <div key={log.id} className={cn(
+                            "flex items-center gap-3 text-sm p-2 rounded",
+                            log.status === 'completed' ? 'text-lime' : 'text-gray-lt',
+                            log.status === 'processing' ? 'text-blue bg-blue/10' : '',
+                            log.status === 'failed' ? 'text-orange' : ''
+                        )}>
+                            <StatusIcon status={log.status} />
+                            <span>{log.label}</span>
+                        </div>
+                        ))}
+                    </div>
+
+                    {/* Tips Section */}
+                    <div className="mt-8 border-t border-gray-dk pt-4">
+                        <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+                            <Lightbulb className="w-5 h-5 text-lime"/> While you wait...
+                        </h3>
+                        <ul className="list-disc list-inside space-y-2 text-sm text-gray-lt pl-2">
+                        <li>Report generation can take several minutes depending on complexity.</li>
+                        <li>The AI is analyzing vast amounts of data to ensure accuracy.</li>
+                        <li>You can leave this page open; polling will continue in the background (if window is focused).</li>
+                        <li>Once complete, you'll be redirected to the results page automatically.</li>
+                        </ul>
+                    </div>
+                    </>
+                )}
+                 {task && task.status === 'completed' && ( // Briefly show completion message before redirect
+                    <div className="text-center py-10 text-lime">
+                        <CheckCircle className="w-8 h-8 mx-auto mb-3" />
+                        <p className="font-semibold">Report Generated Successfully!</p>
+                        <p className="text-sm text-gray-lt">Redirecting to results...</p>
+                    </div>
+                )}
+            </div>
+        )}
       </div>
     </div>
   );
-} 
+}
