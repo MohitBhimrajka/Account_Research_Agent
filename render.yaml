@@ -2,20 +2,20 @@ services:
   # Backend API service
   - type: web
     name: supervity-backend
-    env: python
-    region: oregon  # Choose your preferred region
+    runtime: python
+    region: oregon
+    plan: free
     buildCommand: pip install -r requirements.txt && pip install -e .
     startCommand: uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
-    plan: free  # Adjust as needed
     healthCheckPath: /
     envVars:
       - key: LLM_MODEL
         value: gemini-2.5-pro-preview-03-25
       - key: LLM_TEMPERATURE
-        value: 0.63
+        value: "0.63"
       - key: GEMINI_API_KEY
-        sync: false  # This will prompt for the value during deployment
-    # Use Render's apt packages feature instead of apt-get in build script
+        sync: false
+    # Use Render's apt packages feature
     packages:
       - build-essential
       - python3-dev
@@ -33,8 +33,7 @@ services:
   # Frontend static site
   - type: web
     name: supervity-frontend
-    env: static
-    # region is not allowed for static sites
+    runtime: static
     buildCommand: cd account-research-ui && npm install && npm run build
     staticPublishPath: account-research-ui/dist
     pullRequestPreviewsEnabled: false
@@ -43,11 +42,4 @@ services:
         fromService:
           name: supervity-backend
           type: web
-          property: host  # Changed from url to host
-
-# Ensure that the backend is deployed before the frontend
-envVarGroups:
-  - name: backend-env
-    envVars:
-      - key: GEMINI_API_KEY
-        sync: false  # This will prompt for the value during deployment 
+          property: host
