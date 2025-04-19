@@ -59,6 +59,45 @@ const rowVariants = {
     visible: { opacity: 1, y: 0 }
 };
 
+// Skeleton loader component
+const TableSkeleton = () => {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead>Company</TableHead>
+          <TableHead className="hidden sm:table-cell">Language</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="hidden md:table-cell">Created</TableHead>
+          <TableHead className="text-right">Action</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {[...Array(5)].map((_, index) => (
+          <TableRow key={index}>
+            <TableCell>
+              <div className="h-4 bg-secondary/50 rounded animate-pulse w-24 mb-1"></div>
+              <div className="h-3 bg-secondary/30 rounded animate-pulse w-20 md:hidden"></div>
+            </TableCell>
+            <TableCell className="hidden sm:table-cell">
+              <div className="h-4 bg-secondary/50 rounded animate-pulse w-16"></div>
+            </TableCell>
+            <TableCell>
+              <div className="h-5 bg-secondary/50 rounded-full animate-pulse w-16"></div>
+            </TableCell>
+            <TableCell className="hidden md:table-cell">
+              <div className="h-4 bg-secondary/50 rounded animate-pulse w-28"></div>
+            </TableCell>
+            <TableCell className="text-right">
+              <div className="h-8 bg-secondary/50 rounded animate-pulse w-16 ml-auto"></div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+};
+
 export default function HistoryPage() {
   const navigate = useNavigate();
   
@@ -100,9 +139,12 @@ export default function HistoryPage() {
         
         <div className="bg-card rounded-xl p-6 shadow-lg border border-border">
           {isLoading ? (
-            <div className="text-center py-12 flex flex-col items-center text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin mb-3 text-lime"/>
-              <p>Loading task history...</p>
+            <div>
+              <div className="text-sm text-muted-foreground mb-4 flex items-center justify-center">
+                <Loader2 className="w-4 h-4 animate-spin mr-2 text-lime"/>
+                <span>Loading task history...</span>
+              </div>
+              <TableSkeleton />
             </div>
           ) : error ? (
             <div className="text-center py-12 flex flex-col items-center text-destructive">

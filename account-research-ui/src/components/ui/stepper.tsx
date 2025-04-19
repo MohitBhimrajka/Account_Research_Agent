@@ -46,7 +46,7 @@ const Stepper = React.forwardRef<HTMLDivElement, StepperProps>(
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
                     isCompleted 
-                      ? "bg-lime text-white" 
+                      ? "bg-lime text-white shadow-sm shadow-lime/30"
                       : isActive 
                         ? "bg-lime-lt text-navy border-2 border-lime" 
                         : "bg-gray-dk text-white"
@@ -65,9 +65,11 @@ const Stepper = React.forwardRef<HTMLDivElement, StepperProps>(
                   <div
                     className={cn(
                       orientation === "vertical" 
-                        ? "h-10 w-px my-1 ml-4"
-                        : "h-px w-full mx-1",
-                      isCompleted ? "bg-lime" : "bg-gray-dk"
+                        ? "h-10 w-[2px] my-1 ml-4"
+                        : "h-[2px] w-full mx-1",
+                      isCompleted 
+                        ? "bg-gradient-to-r from-lime via-lime to-lime-lt"
+                        : "bg-gray-dk"
                     )}
                   />
                 )}

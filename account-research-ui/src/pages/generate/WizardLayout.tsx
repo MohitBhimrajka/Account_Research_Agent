@@ -13,6 +13,7 @@ import { Loader2, Send, ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query';
 import { SubmitHandler } from 'react-hook-form'; // Import SubmitHandler
 import { cn } from '../../lib/utils'; // Ensure cn is imported
+import toast from 'react-hot-toast'; // Import toast
 
 // Define the type for the languages map from the API
 type LanguagesMap = Record<string, string>;
@@ -42,8 +43,8 @@ const stepVariants = {
 };
 
 const stepTransition = {
-  x: { type: "tween", ease: "easeInOut", duration: 0.3 },
-  opacity: { duration: 0.2 }
+  x: { type: "tween", ease: "easeOut", duration: 0.25 },
+  opacity: { duration: 0.15 }
 };
 
 // Internal component with access to form context
@@ -74,35 +75,19 @@ function WizardForm() {
   
   const handleNext = async (e?: MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
-    console.log(`--- handleNext called (Going from Step ${currentStep} to ${currentStep + 1}) ---`);
-    const fieldsToValidate = steps[currentStep].fields; // Should be ['targetCompany'] when currentStep is 0
-    console.log(`Fields to validate for step ${currentStep}:`, fieldsToValidate);
+    const fieldsToValidate = steps[currentStep].fields;
 
     const isValidStep = await trigger(fieldsToValidate);
-    console.log(`Validation result for step ${currentStep}: ${isValidStep}`);
-
-    const shouldAdvance = currentStep < steps.length - 1; // Will be true only if currentStep is 0
-    console.log(`Should advance? (${currentStep} < ${steps.length - 1}): ${shouldAdvance}`);
+    const shouldAdvance = currentStep < steps.length - 1;
 
     if (isValidStep && shouldAdvance) {
-      console.log(`Validation passed and not last step. Calling setCurrentStep.`);
       setDirection(1); // Set direction before state change
-      setCurrentStep(prev => {
-        const nextStep = prev + 1;
-        console.log(`Inside setCurrentStep: Advancing from ${prev} to ${nextStep}`);
-        return nextStep; // Advances to step index 1
-      });
+      setCurrentStep(prev => prev + 1);
       if (apiError) setApiError(null);
-    } else if (!isValidStep) {
-      console.log(`Validation FAILED for step ${currentStep}. Errors:`, JSON.stringify(errors));
-    } else {
-      console.log(`Condition not met to advance (Already last step or validation failed).`);
     }
-    console.log(`--- handleNext finished ---`);
   };
 
   const handleBack = () => {
-    console.log("--- handleBack called ---");
     if (currentStep > 0) {
       setDirection(-1); // Set direction before state change
       setCurrentStep(prev => prev - 1); // Moves back to step index 0
@@ -112,22 +97,22 @@ function WizardForm() {
 
   // This function is PASSED TO RHF's handleSubmit. It receives validated form data.
   const processFormSubmit: SubmitHandler<FormValues> = async (data) => {
-    console.log(`--- processFormSubmit called (FINAL SUBMISSION from Step ${currentStep}) ---`);
-    console.log("Data received by submit handler:", data);
     setApiError(null);
     setIsSubmitting(true);
 
     // Wait if languages are still loading for the lookup
     if (isLoadingLanguages) {
-        console.log('processFormSubmit: Waiting for languages map...');
-        setApiError("Language configuration still loading, please wait...");
+        const errorMsg = "Language configuration still loading, please wait...";
+        setApiError(errorMsg);
+        toast.error(errorMsg);
         setIsSubmitting(false);
         return;
     }
 
     if (languagesError || !availableLanguages) {
-      console.error('processFormSubmit: Language fetch error or data missing.');
-      setApiError(`Failed to load language configuration: ${languagesError?.message || 'Unknown error'}`);
+      const errorMsg = `Failed to load language configuration: ${languagesError?.message || 'Unknown error'}`;
+      setApiError(errorMsg);
+      toast.error(errorMsg);
       setIsSubmitting(false);
       return;
     }
@@ -138,8 +123,9 @@ function WizardForm() {
     )?.[0];
 
     if (!languageKey) {
-        console.error('processFormSubmit: Could not find language key for:', data.language);
-        setApiError("Selected language is invalid or not configured properly.");
+        const errorMsg = "Selected language is invalid or not configured properly.";
+        setApiError(errorMsg);
+        toast.error(errorMsg);
         setIsSubmitting(false);
         return;
     }
@@ -151,22 +137,19 @@ function WizardForm() {
           language_key: languageKey,
           sections: data.sections || [] // Ensure sections is always an array
       };
-      console.log('processFormSubmit: Sending API Payload:', payload);
+      
       const { task_id } = await api.createTask(payload);
-      console.log('processFormSubmit: Task created with ID:', task_id);
-      console.log(`processFormSubmit: Navigating to /task/${task_id}`);
+      toast.success("Task created successfully! Redirecting...");
       navigate(`/task/${task_id}`);
 
     } catch (error: any) {
-      console.error('processFormSubmit: Error creating task:', error);
-      setApiError(
-        error.response?.data?.detail ||
-        error.message ||
-        'Failed to create task. Please try again.'
-      );
+      const errorMessage = error.response?.data?.detail ||
+                         error.message ||
+                         'Failed to create task. Please try again.';
+      setApiError(errorMessage);
+      toast.error(errorMessage);
       setIsSubmitting(false); // Reset submitting state on error
     }
-    console.log(`--- processFormSubmit finished ---`);
   };
 
   // Render step components based on the current step index
@@ -178,8 +161,6 @@ function WizardForm() {
   // Determine if the current step has validation errors
   const hasCurrentStepErrors = steps[currentStep].fields.some(field => !!errors[field]);
 
-  console.log(`WizardForm Rendering: currentStep=${currentStep}, isValid=${isValid}, hasCurrentStepErrors=${hasCurrentStepErrors}, isSubmitting=${isSubmitting}`);
-  
   return (
     // Use RHF's handleSubmit to wrap the actual submission logic
     <form onSubmit={handleSubmit(processFormSubmit)} className="space-y-8 flex flex-col flex-grow">

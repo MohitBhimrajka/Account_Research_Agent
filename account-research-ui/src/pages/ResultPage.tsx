@@ -231,25 +231,53 @@ export default function ResultPage() {
              {/* PDF Controls - Sticky Bar */}
             <div className="flex justify-between items-center mb-4 sticky top-0 bg-card/90 backdrop-blur-sm z-10 py-2 px-1 rounded-t-md border-b border-border">
                  <div className="flex gap-2">
-                     <Button variant="ghost" size="icon" onClick={zoomOut} disabled={pdfScale <= 0.5} aria-label="Zoom Out">
+                     <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         onClick={zoomOut} 
+                         disabled={pdfScale <= 0.5} 
+                         aria-label="Zoom Out"
+                         title="Zoom Out"
+                     >
                          <ZoomOut className="w-5 h-5"/>
                      </Button>
-                     <span className="text-sm font-medium px-3 py-2 rounded bg-secondary/50 text-secondary-foreground flex items-center justify-center min-w-[60px]">
+                     <span className="text-sm font-medium px-3 py-2 rounded bg-secondary/50 text-secondary-foreground flex items-center justify-center min-w-[60px]" aria-live="polite" aria-atomic="true">
                          {Math.round(pdfScale * 100)}%
                      </span>
-                     <Button variant="ghost" size="icon" onClick={zoomIn} disabled={pdfScale >= 3.0} aria-label="Zoom In">
+                     <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         onClick={zoomIn} 
+                         disabled={pdfScale >= 3.0} 
+                         aria-label="Zoom In"
+                         title="Zoom In"
+                     >
                          <ZoomIn className="w-5 h-5"/>
                      </Button>
                  </div>
                  {numPages && numPages > 1 && (
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={goToPrevPage} disabled={currentPage <= 1} aria-label="Previous Page">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={goToPrevPage} 
+                            disabled={currentPage <= 1} 
+                            aria-label="Previous Page"
+                            title="Previous Page"
+                        >
                              <ChevronLeft className="w-5 h-5"/>
                         </Button>
-                        <span className="text-sm font-medium text-muted-foreground">
+                        <span className="text-sm font-medium text-muted-foreground" aria-live="polite" aria-atomic="true">
                             Page {currentPage} of {numPages}
                         </span>
-                        <Button variant="ghost" size="icon" onClick={goToNextPage} disabled={currentPage >= numPages} aria-label="Next Page">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={goToNextPage} 
+                            disabled={currentPage >= numPages} 
+                            aria-label="Next Page"
+                            title="Next Page"
+                        >
                             <ChevronRight className="w-5 h-5"/>
                         </Button>
                     </div>
@@ -257,67 +285,93 @@ export default function ResultPage() {
             </div>
 
             {/* PDF Viewer Container */}
-            <div className="flex-1 bg-secondary/20 rounded-md min-h-[70vh] max-h-[75vh] w-full overflow-auto p-4 flex items-start justify-center relative">
-              <AnimatePresence mode="wait">
-                {/* Loading State */}
-                {isPdfLoading && (
-                  <motion.div
-                    key="loading"
-                    variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
-                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground space-y-3"
-                  >
-                    <Loader2 className="w-8 h-8 animate-spin text-lime" />
-                    <p>Loading PDF Preview...</p>
-                  </motion.div>
-                )}
+            <div 
+                className="flex-1 bg-secondary/20 rounded-md min-h-[70vh] max-h-[75vh] w-full overflow-auto p-4 flex items-center justify-center relative"
+                aria-label="PDF Document Viewer"
+                role="region"
+            >
+                <AnimatePresence mode="wait">
+                    {/* Loading State */}
+                    {isPdfLoading && (
+                        <motion.div
+                            key="loading"
+                            variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
+                            className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground space-y-3"
+                            aria-live="polite"
+                            aria-label="Loading PDF"
+                        >
+                            <motion.div 
+                                animate={{ scale: [0.95, 1.05, 0.95], opacity: [0.8, 1, 0.8] }}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                                className="bg-card/60 backdrop-blur-sm rounded-xl p-6 shadow-lg flex flex-col items-center"
+                            >
+                                <Loader2 className="w-10 h-10 animate-spin text-lime mb-3" />
+                                <p className="text-sm font-medium">Loading PDF Preview...</p>
+                                <p className="text-xs text-muted-foreground mt-1">Please wait, preparing your report</p>
+                            </motion.div>
+                        </motion.div>
+                    )}
 
-                {/* Error State */}
-                {pdfError && !isPdfLoading && (
-                  <motion.div
-                    key="error"
-                    variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
-                    className="absolute inset-0 flex flex-col items-center justify-center text-center text-destructive p-6 space-y-3"
-                  >
-                    <FileWarning className="w-10 h-10" />
-                    <p className="font-semibold">Error Loading Preview</p>
-                    <p className="text-sm max-w-sm">{pdfError}</p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={loadPdf}
-                      className="mt-2 flex items-center gap-1"
-                    >
-                      <RotateCcw className="w-4 h-4"/> Retry Preview
-                    </Button>
-                  </motion.div>
-                )}
+                    {/* Error State */}
+                    {pdfError && !isPdfLoading && (
+                        <motion.div
+                            key="error"
+                            variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
+                            className="absolute inset-0 flex flex-col items-center justify-center text-center text-destructive p-6 space-y-3"
+                            aria-live="assertive"
+                            role="alert"
+                        >
+                            <FileWarning className="w-10 h-10" />
+                            <p className="font-semibold">Error Loading Preview</p>
+                            <p className="text-sm max-w-sm">{pdfError}</p>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={loadPdf}
+                                className="mt-2 flex items-center gap-1"
+                            >
+                                <RotateCcw className="w-4 h-4"/> Retry Preview
+                            </Button>
+                        </motion.div>
+                    )}
 
-                {/* PDF Document */}
-                {!isPdfLoading && pdfFile && !pdfError && (
-                  <motion.div
-                      key="pdfdoc"
-                      variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
-                  >
-                      <Document
-                        file={pdfFile}
-                        onLoadSuccess={onDocumentLoadSuccess}
-                        onLoadError={onDocumentLoadError}
-                        loading="" // Handled by our state
-                        error=""   // Handled by our state
-                        className="flex flex-col items-center pdf-document"
-                      >
-                         {/* Apply scale */}
-                        <Page
-                          pageNumber={currentPage}
-                          renderTextLayer={true}
-                          renderAnnotationLayer={true}
-                          scale={pdfScale}
-                          className="react-pdf__Page" // Keep default class for potential CSS overrides
-                        />
-                      </Document>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    {/* PDF Document */}
+                    {!isPdfLoading && pdfFile && !pdfError && (
+                        <motion.div
+                            key="pdfdoc"
+                            variants={pdfViewerVariants} initial="hidden" animate="visible" exit="exit"
+                            aria-live="polite"
+                        >
+                            <Document
+                                file={pdfFile}
+                                onLoadSuccess={onDocumentLoadSuccess}
+                                onLoadError={onDocumentLoadError}
+                                loading="" // Handled by our state
+                                error=""   // Handled by our state
+                                className="flex flex-col items-center pdf-document"
+                                inputRef={(ref) => {
+                                    if (ref) {
+                                        ref.setAttribute('aria-label', 'PDF Document');
+                                    }
+                                }}
+                            >
+                                {/* Apply scale */}
+                                <Page
+                                    pageNumber={currentPage}
+                                    renderTextLayer={true}
+                                    renderAnnotationLayer={true}
+                                    scale={pdfScale}
+                                    className="react-pdf__Page" // Keep default class for potential CSS overrides
+                                    inputRef={(ref) => {
+                                        if (ref) {
+                                            ref.setAttribute('aria-label', `PDF Page ${currentPage}`);
+                                        }
+                                    }}
+                                />
+                            </Document>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div> {/* End PDF Viewer Container */}
           </div> {/* End PDF Preview Area */}
 
