@@ -13,14 +13,14 @@ services:
         value: gemini-2.5-pro-preview-03-25
       - key: LLM_TEMPERATURE
         value: 0.63
-      - key: GOOGLE_API_KEY
+      - key: GEMINI_API_KEY
         sync: false  # This will prompt for the value during deployment
 
   # Frontend static site
   - type: web
     name: supervity-frontend
     env: static
-    region: oregon  # Choose your preferred region
+    # region is not allowed for static sites
     buildCommand: cd account-research-ui && npm install && npm run build
     staticPublishPath: account-research-ui/dist
     pullRequestPreviewsEnabled: false
@@ -29,11 +29,11 @@ services:
         fromService:
           name: supervity-backend
           type: web
-          property: url
+          property: host  # Changed from url to host
 
 # Ensure that the backend is deployed before the frontend
 envVarGroups:
   - name: backend-env
     envVars:
-      - key: GOOGLE_API_KEY
+      - key: GEMINI_API_KEY
         sync: false  # This will prompt for the value during deployment 

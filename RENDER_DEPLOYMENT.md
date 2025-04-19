@@ -29,7 +29,7 @@ This guide provides step-by-step instructions for deploying the Supervity applic
 Add the following environment variables:
 - `LLM_MODEL`: `gemini-2.5-pro-preview-03-25` (or your preferred model)
 - `LLM_TEMPERATURE`: `0.63` (or your preferred temperature)
-- `GOOGLE_API_KEY`: Your Google AI API key
+- `GEMINI_API_KEY`: Your Google AI API key
 - `PORT`: `10000` (Render will automatically set this)
 
 ### Configure Health Check
