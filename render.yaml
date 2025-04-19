@@ -1,13 +1,13 @@
 services:
-  # Backend API service
+  # Backend API service (now Docker‑based)
   - type: web
     name: supervity-backend
-    runtime: python
+    runtime: docker       # use a Dockerfile instead of the built‑in Python runtime :contentReference[oaicite:0]{index=0}
     region: oregon
     plan: free
-    buildCommand: pip install -r requirements.txt && pip install -e .
-    startCommand: uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /
+    # any startup command is handled by your Dockerfile's CMD; you can override it via `dockerCommand` if needed
     envVars:
       - key: LLM_MODEL
         value: gemini-2.5-pro-preview-03-25
@@ -15,20 +15,6 @@ services:
         value: "0.63"
       - key: GEMINI_API_KEY
         sync: false
-    # Use Render's apt packages feature
-    packages:
-      - build-essential
-      - python3-dev
-      - python3-pip
-      - python3-setuptools
-      - python3-wheel
-      - python3-cffi
-      - libcairo2
-      - libpango-1.0-0
-      - libpangocairo-1.0-0
-      - libgdk-pixbuf2.0-0
-      - libffi-dev
-      - shared-mime-info
 
   # Frontend static site
   - type: web
