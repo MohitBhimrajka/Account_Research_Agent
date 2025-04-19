@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Eye } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Eye, AlertCircle, Loader2, Search } from 'lucide-react';
 
 import api, { Task } from '../api/client';
 import { Button } from '../components/ui/button';
@@ -15,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { cn } from '../lib/utils';
 
 // Status variants mapping for badges
 const statusVariant = (status: string) => {
@@ -41,6 +43,20 @@ const formatDate = (dateString: string) => {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+};
+
+// Animation variants
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: { staggerChildren: 0.05 }
+    }
+};
+
+const rowVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 }
 };
 
 export default function HistoryPage() {
@@ -73,82 +89,99 @@ export default function HistoryPage() {
   }, [refetch]);
   
   return (
-    <div className="min-h-screen bg-black p-6">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-6">Research History</h1>
+    <div className="min-h-[calc(100vh-10rem)] bg-background p-4 md:p-6 lg:p-8">
+      <motion.div
+         className="max-w-6xl mx-auto"
+         initial={{ opacity: 0, y: 20 }}
+         animate={{ opacity: 1, y: 0 }}
+         transition={{ duration: 0.4 }}
+      >
+        <h1 className="text-3xl font-bold text-foreground mb-8">Research History</h1>
         
-        <div className="bg-navy rounded-xl p-6 shadow-lg">
+        <div className="bg-card rounded-xl p-6 shadow-lg border border-border">
           {isLoading ? (
-            <div className="text-center py-8">
-              <p className="text-white">Loading task history...</p>
+            <div className="text-center py-12 flex flex-col items-center text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin mb-3 text-lime"/>
+              <p>Loading task history...</p>
             </div>
           ) : error ? (
-            <div className="text-center py-8">
-              <p className="text-orange">Error loading task history</p>
-              <Button onClick={() => refetch()} className="mt-4" variant="outline">
+            <div className="text-center py-12 flex flex-col items-center text-destructive">
+              <AlertCircle className="w-10 h-10 mb-3"/>
+              <p className="font-semibold mb-2">Error Loading History</p>
+              <p className="text-sm mb-4">{(error as Error).message}</p>
+              <Button onClick={() => refetch()} variant="secondary">
                 Try Again
               </Button>
             </div>
           ) : tasks && tasks.length > 0 ? (
-            <Table>
-              <TableCaption>Your account research task history</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Task ID</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Language</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tasks.map((task) => (
-                  <TableRow key={task.task_id}>
-                    <TableCell className="font-medium text-white">
-                      {task.task_id.substring(0, 8)}...
-                    </TableCell>
-                    <TableCell className="text-white">
-                      {task.request?.company_name || 'N/A'}
-                    </TableCell>
-                    <TableCell className="text-white">
-                      {task.request?.language_key === '2' ? 'English' : 
-                       task.request?.language_key === '1' ? 'German' : 
-                       'English'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(task.status)}>
-                        {task.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-gray-lt">
-                      {formatDate(task.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewTask(task)}
-                        className="text-blue hover:text-blue"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                    </TableCell>
+            <motion.div variants={containerVariants} initial="hidden" animate="visible">
+              <Table>
+                <TableCaption>Your past account research tasks.</TableCaption>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Company</TableHead>
+                    <TableHead className="hidden sm:table-cell">Language</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Created</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {tasks.map((task) => (
+                    <motion.tr
+                      key={task.task_id}
+                      variants={rowVariants}
+                      className={cn(
+                        "border-b border-border transition-colors hover:bg-secondary/30 data-[state=selected]:bg-secondary",
+                        "group"
+                      )}
+                    >
+                      <TableCell className="font-medium text-card-foreground py-3">
+                        {task.request?.company_name || 'N/A'}
+                        <div className="text-xs text-muted-foreground md:hidden">
+                          {formatDate(task.created_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground py-3 hidden sm:table-cell">
+                        {task.request?.language_key === '2' ? 'English' : 
+                        task.request?.language_key === '1' ? 'German' : 
+                        'English'}
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <Badge variant={statusVariant(task.status)}>
+                          {task.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground py-3 hidden md:table-cell">
+                        {formatDate(task.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right py-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewTask(task)}
+                          className="text-accent opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+                        >
+                          <Eye className="h-4 w-4"/> View
+                        </Button>
+                      </TableCell>
+                    </motion.tr>
+                  ))}
+                </TableBody>
+              </Table>
+            </motion.div>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-white mb-4">No research tasks found</p>
+            <div className="text-center py-16 flex flex-col items-center text-muted-foreground">
+              <Search className="w-12 h-12 mb-4 text-muted-foreground"/>
+              <p className="text-lg font-medium text-foreground mb-3">No Research Tasks Found</p>
+              <p className="text-sm mb-6">Get started by creating your first report.</p>
               <Button onClick={() => navigate('/generate')} variant="primary">
-                Create Your First Report
+                Create Report
               </Button>
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 } 

@@ -4,40 +4,40 @@
 
 @layer base {
   :root {
-    /* Define CSS variables based on Tailwind config */
-    --background: 0 0% 0%; /* black */
-    --foreground: 0 0% 100%; /* white */
+    /* HSL values derived from tailwind.config.ts brandColors */
+    --background: 0 0% 0%; /* black: #000000 */
+    --foreground: 0 0% 100%; /* white: #ffffff */
 
-    --card: 227 100% 11%; /* navy */
-    --card-foreground: 0 0% 100%;
+    --card: 227 100% 11%; /* navy: #000b37 */
+    --card-foreground: 0 0% 100%; /* white: #ffffff */
 
-    --popover: 227 100% 11%; /* navy */
-    --popover-foreground: 0 0% 100%;
+    --popover: 227 100% 11%; /* navy: #000b37 */
+    --popover-foreground: 0 0% 100%; /* white: #ffffff */
 
-    --primary: 0 0% 0%; /* black */
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 0%; /* black: #000000 */
+    --primary-foreground: 0 0% 100%; /* white: #ffffff */
 
-    --secondary: 0 0% 28%; /* gray-dk */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 0 0% 28%; /* gray-dk: #474747 */
+    --secondary-foreground: 0 0% 100%; /* white: #ffffff */
 
-    --muted: 0 0% 28%; /* gray-dk */
-    --muted-foreground: 0 0% 78%; /* gray-lt */
+    --muted: 0 0% 28%; /* gray-dk: #474747 */
+    --muted-foreground: 0 0% 78%; /* gray-lt: #c7c7c7 */
 
-    --accent: 78 90% 40%; /* lime */
-    --accent-foreground: 0 0% 0%; /* black */
+    --accent: 78 90% 40%; /* lime: #85c20b */
+    --accent-foreground: 0 0% 0%; /* black: #000000 */
 
-    --destructive: 20 100% 67%; /* orange */
-    --destructive-foreground: 0 0% 0%;
+    --destructive: 20 100% 67%; /* orange: #ff9a5a */
+    --destructive-foreground: 0 0% 0%; /* black: #000000 */
 
-    --border: 0 0% 28%; /* gray-dk */
-    --input: 0 0% 28%; /* gray-dk */
-    --ring: 78 90% 40%; /* lime */
+    --border: 0 0% 28%; /* gray-dk: #474747 */
+    --input: 0 0% 28%; /* gray-dk: #474747 - Typically border for inputs */
+    --ring: 78 90% 40%; /* lime: #85c20b */
 
-    --radius: 0.5rem;
+    --radius: 0.5rem; /* Default border radius */
   }
 
+  /* Define .dark variables - in this case, they are the same as :root */
   .dark {
-     /* Keep the same variables for dark mode as the base is already dark */
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
     --card: 227 100% 11%;
@@ -62,34 +62,38 @@
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border transition-colors duration-150 ease-in-out; /* Add default transition */
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground min-h-screen antialiased; /* Use semantic names */
     font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-    font-weight: 400;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; /* Keep font stack */
   }
 
-    /* Simple Scrollbar styling */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        @apply bg-primary; /* Black track */
-      }
-      ::-webkit-scrollbar-thumb {
-        @apply bg-gray-dk rounded-full; /* Dark Gray thumb */
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        @apply bg-lime; /* Lime thumb on hover */
-      }
+  /* Improved Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-primary; /* Black track */
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-secondary rounded; /* Dark Gray thumb, slightly rounded */
+    border: 2px solid hsl(var(--primary)); /* Add a border matching background */
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent; /* Lime thumb on hover */
+  }
+
+  /* Remove focus outline globally, rely on Tailwind focus-visible utilities */
+  *:focus {
+      outline: none;
+  }
+  *:focus-visible { /* Style focus state using Tailwind's ring utility */
+      @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
 }
 
 /* Remove the other globals.css content as it's now handled by Tailwind base/theme */

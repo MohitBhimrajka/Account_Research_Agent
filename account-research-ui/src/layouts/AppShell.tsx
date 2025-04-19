@@ -1,45 +1,82 @@
 // FILE: account-research-ui/src/layouts/AppShell.tsx
-import { Link } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'; // Import useLocation
+import { motion, AnimatePresence } from 'framer-motion'; // Import motion and AnimatePresence
 import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
   navigationMenuTriggerStyle,
-} from '../components/ui/navigation-menu'
+} from '../components/ui/navigation-menu';
+import { cn } from '../lib/utils'; // Use local cn util
+
+// Define page transition variants
+const pageVariants = {
+  initial: {
+    opacity: 0,
+  },
+  in: {
+    opacity: 1,
+  },
+  out: {
+    opacity: 0,
+  },
+};
+
+const pageTransition = {
+  type: "tween",
+  ease: "anticipate",
+  duration: 0.4,
+};
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const location = useLocation(); // Get location for AnimatePresence key
+
   return (
-    <div className="min-h-screen bg-primary"> {/* Use primary color (black) */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-primary h-16"> {/* Adjusted height */}
-        <div className="container flex h-16 max-w-screen-2xl items-center mx-auto px-4 sm:px-6 lg:px-8"> {/* Added padding and centering */}
-          <div className="mr-4 flex">
-            <Link to="/" className="mr-6 flex items-center space-x-2">
-              <img src="/supervity_logo.png" alt="Supervity Logo" className="h-8 w-auto" />
-              <span className="text-lg font-bold text-lime"> {/* Lime text */}
-                Account Research AI Agent
-              </span>
-            </Link>
-          </div>
-          <NavigationMenu className="flex-grow justify-end"> {/* Pushed nav to right */}
+    <div className="min-h-screen flex flex-col bg-background"> {/* Use semantic background */}
+      {/* Header */}
+      <motion.header
+        initial={{ y: -64, opacity: 0 }} // Start off-screen and transparent
+        animate={{ y: 0, opacity: 1 }}     // Animate down and fade in
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 h-16" // Add backdrop blur
+      >
+        <div className="container flex h-full items-center justify-between"> {/* Use container & justify-between */}
+
+          {/* Left Side: Logo and Title */}
+          <Link to="/" className="flex items-center space-x-2 mr-6">
+            <motion.img
+              src="/supervity_logo.png"
+              alt="Supervity Logo"
+              className="h-8 w-auto" // Reduced logo size slightly
+              whileHover={{ scale: 1.1, rotate: -5 }} // Add subtle hover effect
+            />
+            <span className="hidden sm:inline-block text-lg font-semibold text-foreground whitespace-nowrap"> {/* Use foreground, hide on xs */}
+              Account Research <span className="text-lime">AI Agent</span>
+            </span>
+          </Link>
+
+          {/* Right Side: Navigation */}
+          <NavigationMenu>
             <NavigationMenuList>
               <NavigationMenuItem>
                 <Link to="/">
-                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-white hover:text-lime hover:bg-navy")}> {/* Style adjustment */}
+                  {/* Apply hover effects directly for simplicity here */}
+                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-foreground hover:text-accent hover:bg-accent/10 transition-all duration-150")}>
                     Home
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <Link to="/generate">
-                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-white hover:text-lime hover:bg-navy")}> {/* Style adjustment */}
+                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-foreground hover:text-accent hover:bg-accent/10 transition-all duration-150")}>
                     New Report
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <Link to="/history">
-                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-white hover:text-lime hover:bg-navy")}> {/* Style adjustment */}
+                  <NavigationMenuLink className={cn(navigationMenuTriggerStyle(), "text-foreground hover:text-accent hover:bg-accent/10 transition-all duration-150")}>
                     History
                   </NavigationMenuLink>
                 </Link>
@@ -47,18 +84,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </NavigationMenuList>
           </NavigationMenu>
         </div>
-      </header>
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8"> {/* Added padding and centering to main content */}
-        {children}
-      </main>
+      </motion.header>
+
+      {/* Main Content Area with Page Transitions */}
+      <AnimatePresence mode="wait">
+         {/* Wrap Outlet/children in a motion.div for transitions */}
+         <motion.main
+            key={location.pathname} // Key based on the current route
+            initial="initial"
+            animate="in"
+            exit="out"
+            variants={pageVariants}
+            transition={pageTransition}
+            className="flex-1 container py-8" // Keep container and padding
+         >
+            {children} {/* Render the actual page content */}
+         </motion.main>
+      </AnimatePresence>
+
+      {/* Optional Footer */}
+      <footer className="py-4 border-t border-border/40 mt-auto">
+          <div className="container text-center text-xs text-muted-foreground">
+              © {new Date().getFullYear()} Supervity. All rights reserved.
+          </div>
+      </footer>
     </div>
   )
-}
-
-// Add cn utility if not already present globally
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
 }
