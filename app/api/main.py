@@ -317,26 +317,39 @@ async def list_languages():
     return AVAILABLE_LANGUAGES
 
 
+# --- replace the old "/sections" route with this ----------------------------
 @app.get("/sections", response_model=List[SectionInfo])
 async def list_sections():
-    """List available sections with their IDs and titles."""
+    """
+    Return every section ID present in PROMPT_FUNCTIONS, with a human‑readable
+    title.  Titles are taken from SECTION_ORDER if available; otherwise a
+    Title‑Cased version of the ID is used as a fallback.
+    """
     try:
-        # Use SECTION_ORDER to maintain order and get titles
-        section_list = []
-        # Create a map of available section IDs from PROMPT_FUNCTIONS for quick lookup
-        available_section_ids = {item[0] for item in PROMPT_FUNCTIONS}
-
+        # 1. Build a quick lookup {id: title} from SECTION_ORDER (if supplied)
+        order_title_map: Dict[str, str] = {}
         for section_id, title in SECTION_ORDER:
-             # Only include sections that are actually defined in PROMPT_FUNCTIONS
-             if section_id in available_section_ids:
-                 section_list.append(SectionInfo(id=section_id, title=title))
-             else:
-                 logger.warning(f"Section '{section_id}' from SECTION_ORDER not found in PROMPT_FUNCTIONS. Skipping.")
+            order_title_map[section_id] = title
 
-        # Add this logging line before returning
-        logger.info(f"Returning sections: {section_list} (Type: {type(section_list)})")
+        # 2. Build the response directly from PROMPT_FUNCTIONS
+        section_list: List[SectionInfo] = []
+        seen: set[str] = set()  # avoid duplicates if same ID appears twice
+
+        for section_id, _func_name in PROMPT_FUNCTIONS:
+            if section_id in seen:
+                continue
+            seen.add(section_id)
+
+            # Prefer explicit title from SECTION_ORDER; else fall back to ID→Title
+            title = order_title_map.get(section_id) or section_id.replace("_", " ").title()
+
+            section_list.append(SectionInfo(id=section_id, title=title))
+
+        # 3. Log and return
+        logger.info("Returning %s sections: %s", len(section_list), section_list)
         return section_list
 
-    except Exception as e:
-        logger.exception("Error occurred while fetching sections")
-        return [] # Return empty list on error
+    except Exception as exc:
+        logger.exception("Error occurred while building section list")
+        # Return empty array but keep 200 so frontend does not break
+        return []

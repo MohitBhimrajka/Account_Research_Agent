@@ -64,8 +64,11 @@
   * {
     @apply border-border transition-colors duration-150 ease-in-out; /* Add default transition */
   }
+  html {
+    @apply overflow-x-hidden; /* Add overflow-x-hidden to html */
+  }
   body {
-    @apply bg-background text-foreground min-h-screen antialiased; /* Use semantic names */
+    @apply bg-background text-foreground min-h-screen antialiased overflow-x-hidden; /* Add overflow-x-hidden to body */
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; /* Keep font stack */
   }

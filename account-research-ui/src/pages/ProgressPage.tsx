@@ -274,6 +274,9 @@ export default function ProgressPage() {
 
   // Determine Overall Display Progress (use mimicry if active, otherwise actual)
   const displayProgress = isMimicking ? mimickedProgress : task?.progress ?? 0;
+  
+  // Add logging for progress tracking
+  console.log("ProgressPage Rendering: Display Progress =", displayProgress, "isMimicking =", isMimicking, "mimickedProgress =", mimickedProgress, "actualProgress =", task?.progress);
 
   // --- Render Logic ---
 
