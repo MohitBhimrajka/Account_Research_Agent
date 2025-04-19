@@ -45,6 +45,8 @@
             @top-right { content: normal; }
         }
         @page toc {
+            margin-left: 1cm;   /* was 2cm */
+            margin-right: 1cm;
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
                 font-size: 9pt;
@@ -94,10 +96,11 @@
         body {
             font-family: 'Noto Sans', 'Noto Sans JP', 'Helvetica Neue', 'Arial', sans-serif;
             line-height: 1.5;
-            font-size: 10pt;
+            font-size: 10.5pt;
             color: var(--dark-gray);
             margin: 0;
             padding: 0;
+            hyphens: auto;
         }
 
         * { box-sizing: border-box; }
@@ -122,6 +125,7 @@
             text-align: justify;
             hyphens: auto; /* Enable hyphenation */
         }
+        p { word-spacing: -0.05em; }
         ul, ol { padding-left: 1.5em; }
         li { margin-bottom: 0.3em; }
 
@@ -161,6 +165,7 @@
             right: 0;
             height: 15px;
             background: linear-gradient(90deg, var(--lime-green), var(--navy-blue));
+            z-index: 1;
         }
         .cover::after {
             content: "";
@@ -170,6 +175,7 @@
             right: 0;
             height: 10px;
             background: linear-gradient(90deg, var(--navy-blue), var(--lime-green));
+            z-index: 1;
         }
         .cover-wrapper {
             display: flex;
@@ -177,7 +183,7 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            padding: 4cm 3cm;
+            padding: 5cm 3cm;
             position: relative;
             z-index: 1;
         }
@@ -196,7 +202,7 @@
             margin-bottom: 4cm;
         }
         .cover h1 {
-            font-size: 36pt;
+            font-size: 40pt;
             margin: 0 0 1cm 0;
             color: var(--navy-blue);
             font-weight: bold;
@@ -204,7 +210,7 @@
             letter-spacing: -0.02em;
         }
         .cover .subtitle {
-            font-size: 24pt;
+            font-size: 20pt;
             margin: 0 0 2cm 0;
             color: var(--soft-blue);
             font-weight: normal;
@@ -232,7 +238,7 @@
         .table-of-contents {
             padding: 1.5cm 2cm;
             page: toc;
-            background: linear-gradient(180deg, #f9f9f9 0%, #ffffff 100%);
+            background: linear-gradient(180deg, #f9f9fa 0%, #ffffff 100%);
         }
         
         /* New TOC styles */
@@ -272,12 +278,9 @@
             padding: 0 1em;
         }
         
-        .toc-entry {
-            margin: 0.8em 0;
-            position: relative;
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
+        .toc-entry,
+        .toc-subsection {
+            margin: 1.2em 0;            /* was 0.8 / 0.4 */
         }
         
         .toc-entry::after {
@@ -292,7 +295,7 @@
         
         .toc-link {
             font-weight: bold;
-            font-size: 12pt;
+            font-size: 13pt;            /* bump Level‑1 size */
             color: #000b37;
             text-decoration: none;
             background: white;
@@ -316,17 +319,9 @@
         }
         
         .toc-subsections {
-            margin-left: 2em;
+            margin-left: 1.5em;         /* slightly less indent */
             margin-top: 0.5em;
             width: 100%;
-        }
-        
-        .toc-subsection {
-            margin: 0.4em 0;
-            position: relative;
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
         }
         
         .toc-subsection::after {
@@ -340,8 +335,8 @@
         }
         
         .toc-sublink {
-            font-size: 10pt;
-            color: #474747;
+            font-size: 11pt;            /* make Level‑2 smaller */
+            color: #595959;             /* lighter tone */
             text-decoration: none;
             background: white;
             padding-right: 0.5em;
@@ -361,6 +356,10 @@
             color: #474747;
             z-index: 2;
             font-weight: normal;
+        }
+
+        .toc-entry:nth-child(even) .toc-link {
+            background: rgba(0, 0, 0, 0.03);
         }
 
         /* Legacy styles - keep for compatibility */
@@ -470,8 +469,8 @@
             content: "";
             position: absolute;
             top: 0;
-            left: 0;
-            width: 15px;
+            left: -25px;
+            width: 25px;
             height: 100%;
             background: linear-gradient(to bottom, var(--lime-green), var(--light-lime));
             border-right: 1px solid rgba(0, 0, 0, 0.05);
@@ -506,6 +505,12 @@
             border-radius: 8px;
             border: 1px solid #eee;
         }
+        
+        .section-cover .subsections.topic-columns-2 {
+            column-count: 2;
+            column-gap: 1cm;
+        }
+        
         .section-cover .subsections h3 {
             font-size: 18pt;
             color: var(--soft-blue);
@@ -705,7 +710,8 @@
             left: 0;
             right: 0;
             height: 10px;
-            background: linear-gradient(90deg, var(--navy-blue), var(--lime-green));
+            background: linear-gradient(90deg, var(--navy-blue) 0%, transparent 100%);
+            opacity: 0.05;
         }
         .end-page::after {
             content: "";
@@ -715,6 +721,7 @@
             right: 0;
             height: 10px;
             background: linear-gradient(90deg, var(--lime-green), var(--navy-blue));
+            opacity: 0.05;
         }
         .end-page-content {
             display: flex;
@@ -946,11 +953,34 @@
             left: 0.5em;
             color: var(--navy-blue);
         }
+
+        .section-sources {
+            margin-top: 1cm;
+            padding-top: 0.5cm;
+            border-top: 2px solid var(--lime-green);
+            font-size: 9pt;
+        }
+        .section-sources a {
+            color: var(--soft-blue);
+            text-decoration: underline dotted;
+        }
+
+        /* Keep 2 lines with heading */
+        h2 + p, h3 + p { page-break-inside: avoid; }
+
+        p, li { orphans: 2; widows: 2; }
+
+        /* Number alignment for tables */
+        th.text-right { text-align: right; }
     </style>
 </head>
 <body>
     <!-- Cover Page -->
     <div class="cover">
+        <div style="position:absolute;inset:0;
+     background:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%25%22 height=%22100%25%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%25%22 stop-color=%22%23ffffff%22 stop-opacity=%220%22/%3E%3Cstop offset=%22100%25%22 stop-color=%22%238289ec%22 stop-opacity=%220.15%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22url(%23g)%22/%3E%3C/svg%3E')
+     center/cover no-repeat;
+     pointer-events:none; z-index:0;"></div>
         <div class="cover-wrapper">
             <div class="header-icons">
                 <img src="{{ favicon_url }}" alt="Favicon" class="favicon">
@@ -984,7 +1014,7 @@
             <div class="section-cover">
                 <h2>{{ section.title }}</h2>
                 
-                <div class="subsections">
+                <div class="subsections {% if section.key_topics|length > 6 %}topic-columns-2{% endif %}">
                     <h3>In this section:</h3>
                     {% if section.key_topics %}
                         {% for topic in section.key_topics %}
@@ -1004,12 +1034,17 @@
             <div class="section-content">
                 <h2 id="section-{{ section.id }}"><span class="section-number">{{ loop.index }}.</span> {{ section.title }}</h2>
                 {{ section.main_html_content | safe }}
+                {% if section.sources_html_content %}
+                    <div class="section-sources">
+                        {{ section.sources_html_content | safe }}
+                    </div>
+                {% endif %}
             </div>
         {% endfor %}
     </div>
 
     <!-- Final Sources Section -->
-    {% if all_sources_html %}
+    {% if collect_sources_globally and all_sources_html %}
     <div class="final-sources-section">
         <h2>Sources</h2>
         {{ all_sources_html | safe }}
@@ -1029,6 +1064,8 @@
             <div class="contact">
                 <p>For any questions or additional information, please reach out.</p>
             </div>
+            <img src="{{ logo_url }}" style="position:absolute;
+      bottom:3cm; right:3cm; width:6cm; opacity:0.08;">
         </div>
     </div>
 </body>

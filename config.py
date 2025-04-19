@@ -31,6 +31,12 @@ PDF_CONFIG = {
         "LONG_URL_CLASS": "long-url",
         "AVOID_PAGE_BREAK_ELEMENTS": ["table", "figure", "pre", "blockquote"],
     },
+    # Behaviour switches
+    "BEHAVIOUR": {
+        # When False (default) each section keeps its own Sources list.
+        # When True, all Sources blocks are collected and printed once at the end.
+        "COLLECT_SOURCES_GLOBALLY": False,
+    },
 }
 
 # Section order and titles for the final report

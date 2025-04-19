@@ -266,6 +266,11 @@ def main():
     parser.add_argument(
         "--interactive", "-int", action="store_true", help="Use interactive mode"
     )
+    parser.add_argument(
+        "--style", choices=["compact", "spacious"],
+        default="spacious",
+        help="Affects TOC density and page margins"
+    )
 
     args = parser.parse_args()
 
@@ -330,7 +335,8 @@ def main():
     console.print("\n[cyan]Generating PDF report...[/cyan]")
     try:
         pdf_path = process_markdown_files(
-            base_dir, company_name, language, args.template
+            base_dir, company_name, language, template_path=args.template, 
+            style=args.style
         )
         if pdf_path and pdf_path.exists():
             console.print(

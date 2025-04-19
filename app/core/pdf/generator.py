@@ -277,6 +277,14 @@ class EnhancedPDFGenerator:
 
         table["class"] = table.get("class", []) + table_classes
 
+        # Auto‑detect numeric columns and add 'text-right'
+        for idx, row in enumerate(table.find_all("tr")):
+            cells = row.find_all(["td", "th"])
+            for col_idx, cell in enumerate(cells):
+                txt = cell.get_text(strip=True)
+                if re.match(r"^-?[\d,.]+(%?)$", txt):   # crude numeric test
+                    cell['class'] = cell.get('class', []) + ['text-right']
+
         # If the table has a thead, add a class to it
         thead = table.find("thead")
         if thead:
@@ -427,10 +435,16 @@ class EnhancedPDFGenerator:
                     source_html_len = len(processed_sources_html)
                     print(f"Processed sources HTML length: {source_html_len} characters")
 
-                    # Append to global sources HTML collection
+                    # Decide whether to accumulate global sources
+                    collect_globally = PDF_CONFIG.get("BEHAVIOUR", {}).get(
+                        "COLLECT_SOURCES_GLOBALLY", True
+                    )
+
                     if processed_sources_html.strip():
-                        all_sources_html += processed_sources_html + "\n\n" # Add newline between sources from different sections
-                        print(f"Added to all_sources_html (now {len(all_sources_html)} characters)")
+                        section_obj.sources_html_content = processed_sources_html
+                        if collect_globally:
+                            all_sources_html += processed_sources_html + "\n\n"
+                            print(f"Added to all_sources_html (now {len(all_sources_html)} characters)")
 
             # Keep the html_content field for backward compatibility (use main content)
             section_obj.html_content = section_obj.main_html_content
@@ -558,6 +572,11 @@ class EnhancedPDFGenerator:
         toc_html = self._generate_toc(processed_sections)
         print(f"TOC HTML length: {len(toc_html)} characters")
 
+        # Retrieve the sources collection flag
+        collect_globally = PDF_CONFIG.get("BEHAVIOUR", {}).get(
+            "COLLECT_SOURCES_GLOBALLY", True
+        )
+
         # Prepare template variables
         now = datetime.now()
         formatted_date = metadata.get("generation_date", now.strftime("%Y-%m-%d"))
@@ -576,6 +595,7 @@ class EnhancedPDFGenerator:
             "pdf_config": PDF_CONFIG, # Keep if template uses it
             "all_sources_html": all_sources_html,
             "generation_date": formatted_date,
+            "collect_sources_globally": collect_globally,
         }
 
         # print(f"Template variables: {list(template_vars.keys())}") # Optional debug print
@@ -811,6 +831,7 @@ def process_markdown_files(
     company_name: str,
     language: str,
     template_path: Optional[str] = None,
+    style: str = "spacious",
 ) -> Optional[Path]:
     """
     Process markdown files in the specified directory and generate a PDF report.
@@ -820,6 +841,7 @@ def process_markdown_files(
         company_name: Name of the company for the report
         language: Language of the report
         template_path: Optional path to a custom template
+        style: The style of the report
 
     Returns:
         Path to the generated PDF, or None if an error occurred
@@ -890,6 +912,7 @@ def process_markdown_files(
             # Pass resolved paths for logo/favicon if they exist
             "logo": pdf_generator.project_root / "templates/assets/supervity_logo.png",
             "favicon": pdf_generator.project_root / "templates/assets/supervity_favicon.png",
+            "style": style,
         }
 
 

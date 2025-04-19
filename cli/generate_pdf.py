@@ -29,6 +29,9 @@ def main():
     parser.add_argument("--output-dir", "-o", help="Output directory", default="output")
     parser.add_argument("--template", "-t", help="Custom template file path")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--style", choices=["compact", "spacious"],
+                    default="spacious",
+                    help="Affects TOC density and page margins")
 
     args = parser.parse_args()
 
@@ -55,6 +58,7 @@ def main():
                 args.company_name,
                 args.language,
                 template_path=args.template,
+                style=args.style
             )
             progress.update(task, completed=True)
 
