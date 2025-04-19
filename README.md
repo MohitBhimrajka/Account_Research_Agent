@@ -138,7 +138,7 @@ output/
 - pyyaml==6.0.1
 - beautifulsoup4==4.12.2
 - rich==13.5.3
-- google-generativeai
+- google-genai==1.7.0
 - weasyprint>=60.1
 - pygments>=2.16.1
 - jinja2>=3.1.2

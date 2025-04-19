@@ -11,7 +11,7 @@ setup(
         "markdown>=3.4.3",
         "weasyprint>=59.0",
         "pydantic>=2.0.0",
-        "google-generativeai==0.8.4",
+        "google-genai==1.7.0",
         "python-dotenv>=1.0.0",
         "pytest>=7.0.0",
     ],
