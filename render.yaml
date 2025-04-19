@@ -4,7 +4,7 @@ services:
     name: supervity-backend
     env: python
     region: oregon  # Choose your preferred region
-    buildCommand: ./build.sh
+    buildCommand: pip install -r requirements.txt && pip install -e .
     startCommand: uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
     plan: free  # Adjust as needed
     healthCheckPath: /
@@ -15,6 +15,20 @@ services:
         value: 0.63
       - key: GEMINI_API_KEY
         sync: false  # This will prompt for the value during deployment
+    # Use Render's apt packages feature instead of apt-get in build script
+    packages:
+      - build-essential
+      - python3-dev
+      - python3-pip
+      - python3-setuptools
+      - python3-wheel
+      - python3-cffi
+      - libcairo2
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libgdk-pixbuf2.0-0
+      - libffi-dev
+      - shared-mime-info
 
   # Frontend static site
   - type: web
