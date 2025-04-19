@@ -1,0 +1,39 @@
+services:
+  # Backend API service
+  - type: web
+    name: supervity-backend
+    env: python
+    region: oregon  # Choose your preferred region
+    buildCommand: ./build.sh
+    startCommand: uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
+    plan: free  # Adjust as needed
+    healthCheckPath: /
+    envVars:
+      - key: LLM_MODEL
+        value: gemini-2.5-pro-preview-03-25
+      - key: LLM_TEMPERATURE
+        value: 0.63
+      - key: GOOGLE_API_KEY
+        sync: false  # This will prompt for the value during deployment
+
+  # Frontend static site
+  - type: web
+    name: supervity-frontend
+    env: static
+    region: oregon  # Choose your preferred region
+    buildCommand: cd account-research-ui && npm install && npm run build
+    staticPublishPath: account-research-ui/dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: VITE_BACKEND_URL
+        fromService:
+          name: supervity-backend
+          type: web
+          property: url
+
+# Ensure that the backend is deployed before the frontend
+envVarGroups:
+  - name: backend-env
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false  # This will prompt for the value during deployment 

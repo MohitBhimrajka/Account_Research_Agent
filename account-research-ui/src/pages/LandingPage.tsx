@@ -35,15 +35,15 @@ const itemVariants = {
 // Component
 // -----------------------------------------------------------------------------
 export default function LandingPage() {
-  // Respect user “Reduce Motion” setting
+  // Respect user “Reduce Motion” setting
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] bg-background text-foreground overflow-x-hidden">
+    <div className="bg-background text-foreground overflow-x-hidden">
       {/* ---------------------------------------------------------------------
            Hero
       ---------------------------------------------------------------------- */}
-      <section className="container flex flex-col items-center justify-center text-center py-20 md:py-32">
+      <section className="relative overflow-hidden min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center text-center py-20 md:py-32 px-6">
         <motion.img
           src="/supervity_logo.png"
           alt="Supervity logo"
@@ -78,7 +78,7 @@ export default function LandingPage() {
         </motion.p>
 
         <motion.div
-          className="flex flex-col sm:flex-row gap-4 items-center"
+          className="flex flex-col sm:flex-row gap-4 items-center justify-center"
           initial={reduceMotion ? undefined : { opacity: 0, y: 20 }}
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
           transition={reduceMotion ? undefined : { delay: 0.4, duration: 0.5 }}
@@ -111,17 +111,17 @@ export default function LandingPage() {
            How It Works
       ---------------------------------------------------------------------- */}
       <motion.section
-        className="py-16 md:py-24 bg-navy"
+        className="relative overflow-hidden py-16 md:py-24 bg-navy px-6"
         variants={sectionVariants}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.2 }}
       >
-        <div className="container text-center">
+        <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
             How It Works
           </h2>
-          <p className="text-lg text-gray-lt mb-12 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-lt mb-12">
             Generate detailed reports in just a few simple steps.
           </p>
 
@@ -184,13 +184,13 @@ export default function LandingPage() {
            Key Features
       ---------------------------------------------------------------------- */}
       <motion.section
-        className="py-16 md:py-24 bg-background"
+        className="relative overflow-hidden py-16 md:py-24 bg-background px-6"
         variants={sectionVariants}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.2 }}
       >
-        <div className="container">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-12 text-center text-white">
             Key Features
           </h2>
@@ -293,13 +293,13 @@ export default function LandingPage() {
            Why Supervity
       ---------------------------------------------------------------------- */}
       <motion.section
-        className="py-16 md:py-24 bg-gradient-to-br from-navy to-primary"
+        className="relative overflow-hidden py-16 md:py-24 bg-gradient-to-br from-navy to-primary px-6"
         variants={sectionVariants}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.3 }}
       >
-        <div className="container text-center flex flex-col items-center">
+        <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           <img
             src="/supervity_logo.png"
             alt="Supervity logo"
@@ -311,7 +311,7 @@ export default function LandingPage() {
           <h2 className="text-3xl md:text-4xl font-bold mb-5 text-white">
             Why Choose Supervity?
           </h2>
-          <p className="text-lg text-gray-lt mb-10 max-w-3xl mx-auto">
+          <p className="text-lg text-gray-lt mb-10">
             Supervity empowers sales and marketing teams with intelligent
             automation. Our Account Research AI Agent is designed to cut through
             the noise, providing actionable insights that drive meaningful

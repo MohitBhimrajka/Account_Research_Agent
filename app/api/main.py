@@ -38,7 +38,10 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    # Add any other origins if needed, like your production frontend URL
+    # Add Render domains
+    "https://*.onrender.com",  # Allows all Render subdomains
+    "https://*.app",  # For custom domains on Render
+    # You can add your specific render URLs when you know them
 ]
 
 app.add_middleware(
